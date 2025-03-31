@@ -16,4 +16,26 @@ We evaluate the proposed method on a large dataset of randomly generated Erdős�
 <img src="qambp_images/process_diagram.png"/>
 Fig. 1. Proposed approach for penalty parameter tuning. Given graph <em><b>G(n,p)</b></em> prepare QUBO matrix <em><b>Q<sub>G,λ</sub></b></em> for MBP and given penalty parameter <em><b>λ</b></em>. Test the formulation using D-Wave QA HS, Metis and Kerninghan-lin algorithms, and store data in MariaDB. Analyse the results (solution feasibility and accuracy) and recalculate <em><b>λ</b></em> if necessary.
 
-## 1.1. MBP QUBO Formulation and Matrix 
+### 1.1. MBP QUBO Formulation and Matrix 
+- in src mbp_qubo_matrix.py, 
+
+### 1.2. QA Testing
+- in src qa_testing.py
+
+### 1.3. Benchmark algorithms
+-in src pymetis,py, kerninghan_lin.py
+
+
+## 2. QUBO penalty parameter tuning using GBR
+- in src gbr_training.py (+ vystupy)
+
+## 3. Graph generation
+- in src graph_generation.py
+
+
+
+main.py
+
+
+
+
