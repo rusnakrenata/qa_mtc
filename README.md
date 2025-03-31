@@ -57,13 +57,14 @@ QUBO Matrix:
 
 ```
 
-**** - in src mbp_qubo_matrix.py, ****
+[QUBO Matrix Code](src/qubo_matrix.py)
 
 ### 1.2. QA Testing
-**** - in src qa_testing.py ****
+[QA Testing Code](src/qa_testing.py)
 
 ### 1.3. Benchmark algorithms
-**** - in src pymetis,py, kerninghan_lin.py ****
+[PyMetis Code](src/pymetis_testing.py)
+[Kerninghan-lin Code](src/kerninhan_lin_testing.py)
 
 
 ## 2. QUBO penalty parameter tuning using GBR
@@ -100,7 +101,7 @@ QUBO Matrix:
    λ = λ_est * (λ_min + λ_max) / 2
 ```
 
-**** - in src gbr_training.py (+ vystupy) ****
+[GBR Training Code](src/gbr_training.py)
 
 ## 3. Graph generation
 The MBP problem was tested on graphs created using the Erdős–Rényi *G(n, p)* model, where *n* represents the number of nodes, and *p* is the probability of an edge existing between any two nodes, which controls the overall graph density.
@@ -109,7 +110,7 @@ Tested values:
 - *n* ∈ {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000, 4000}
 - *p* ∈ {0.1, 0.25, 0.5, 0.75}
 
-**** in src graph_generation.py ****
+[Graph Generation Code](src/graph_generation.py)
 
 
 
