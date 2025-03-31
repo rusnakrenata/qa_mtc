@@ -32,6 +32,12 @@ Fig. 1. Proposed approach for penalty parameter tuning. Given graph <em><b>G(n,p
 ## 3. Graph generation
 - in src graph_generation.py
 
+## Setup
+```
+git clone https://github.com/rusnakrenata/qambp.git
+cd src
+pip install -r requirements.txt
+```
 
 
 main.py
