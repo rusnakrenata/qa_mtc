@@ -101,7 +101,7 @@ QUBO Matrix:
    λ = λ_est * (λ_min + λ_max) / 2
 ```
 
-[GBR Training Code](src/gbr_training.py)
+[GBR Prediction Code](src/gbr_prediction.py)
 
 ## 3. Graph generation
 The MBP problem was tested on graphs created using the Erdős–Rényi *G(n, p)* model, where *n* represents the number of nodes, and *p* is the probability of an edge existing between any two nodes, which controls the overall graph density.
@@ -111,6 +111,24 @@ Tested values:
 - *p* ∈ {0.1, 0.25, 0.5, 0.75}
 
 [Graph Generation Code](src/graph_generation.py)
+
+
+## 📁 Project Structure Overview
+
+| File                         | Purpose / Description                                                                 |
+|------------------------------|----------------------------------------------------------------------------------------|
+| `main.py`                    | Entry point of the application. Generates graphs, runs partitioning, and stores results. |
+| `database_tables.py`         | SQLAlchemy model definitions for `Graph` and `Partition` tables. Manages DB connection. |
+| `graph_generation.py`        | Generates random graphs and computes basic properties like density, clustering, etc.     |
+| `kerninghan_lin.py`          | Implements the Kernighan–Lin algorithm for graph partitioning.                          |
+| `kerninghan_lin_testing.py`  | Wraps Kernighan–Lin logic with timing and formatting for result storage.                |
+| `pymetis_testing.py`         | Uses PyMetis to partition graphs and compute intra/inter-community edges.               |
+| `qa_testing.py`              | Executes QUBO-based graph partitioning using D-Wave samplers (QPU, hybrid, classical).   |
+| `qubo_matrix.py`             | Constructs the QUBO matrix representation from graph topology and lambda.                |
+| `store_into_db.py`           | Stores graph metadata and QUBO partitioning results into the database.                  |
+| `gbr_prediction.py`          | Trains and uses gradient boosting models to estimate lambda parameter ranges.           |
+
+
 
 
 

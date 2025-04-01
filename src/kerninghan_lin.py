@@ -3,7 +3,7 @@ import random
 
 def balanced_kernighan_lin(G, max_iterations=10):
     """
-    Balanced Kernighan–Lin algorithm for graph partitioning, returning inter-community edges.
+    Balanced Kernighan_Lin algorithm for graph partitioning, returning inter-community edges.
 
     Parameters:
         G: A NetworkX graph
