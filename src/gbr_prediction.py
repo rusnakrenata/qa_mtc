@@ -1,12 +1,13 @@
 import pickle
 import pandas as pd
-from models import engine,Base,sessionmaker
+from database_tables import engine,Base,sessionmaker
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import train_test_split
-from main import max_degree
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from graph_generation import max_degree
 import networkx as nx
 import numpy as np
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
 
 
 Session = sessionmaker(bind=engine)
