@@ -20,6 +20,7 @@ python -m venv .env
 pip install -r requirements.txt
 # python run main.py
 ```
+<br>
 
 
 ## 1. Penalty Parameter Calibration and QA Testing
@@ -56,18 +57,21 @@ QUBO Matrix:
        Q[i, j] ← Q[i, j] + 2λ
 
 ```
+<br>
 
-[QUBO Matrix Code](src/qubo_matrix.py)
+
 
 ### 1.2. QA Testing
-[QA Testing Code](src/qa_testing.py)
+MBP QUBO formulation and penalty parameter tuning was tested using D-Wave Systems' hybrid solver through the Leap cloud platform, accessed via the LeapHybridSampler class in the Ocean SDK.
+We used BinaryQuadraticModel for hybrid testing and EmbeddingComposite(DWaveSampler()) for QPU testing.<br>
+
 
 ### 1.3. Benchmark algorithms
-[PyMetis Code](src/pymetis_testing.py)
-[Kerninghan-lin Code](src/kerninhan_lin_testing.py)
+To assess the effectiveness of QA HS, we used two well-established classical partitioning algorithms—Metis and Kernighan-Lin—as benchmarks. Metis, based on multilevel recursive bisection, is known for its efficiency in handling large-scale graphs, and we used its Python implementation, PyMetis, for our testing. For the Kernighan-Lin algorithm, we implemented the method ourselves in Python, as this allowed us to enforce a balanced solution by ensuring that the algorithm started with two equally sized sets before the first node assignment change. This adjustment was made to maintain fairness in comparison with QA HS, which inherently optimizes for balanced partitions.<br>
 
 
 ## 2. QUBO penalty parameter tuning using GBR
+<br>
 
 ### 2.1. Training the GBR model
 ```
@@ -87,6 +91,7 @@ QUBO Matrix:
 
 5. Save trained models for future predictions.
 ```
+<br>
 
 ### 2.2. Predicting λ for new graphs
 ```
@@ -100,8 +105,7 @@ QUBO Matrix:
 4. Compute final λ:
    λ = λ_est * (λ_min + λ_max) / 2
 ```
-
-[GBR Prediction Code](src/gbr_prediction.py)
+<br>
 
 ## 3. Graph generation
 The MBP problem was tested on graphs created using the Erdős–Rényi *G(n, p)* model, where *n* represents the number of nodes, and *p* is the probability of an edge existing between any two nodes, which controls the overall graph density.
@@ -110,10 +114,10 @@ Tested values:
 - *n* ∈ {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000, 4000}
 - *p* ∈ {0.1, 0.25, 0.5, 0.75}
 
-[Graph Generation Code](src/graph_generation.py)
+<br>
 
 
-## 📁 Project Structure Overview
+## 📁 Project Structure Overview (src)
 
 | File                         | Purpose / Description                                                                 |
 |------------------------------|----------------------------------------------------------------------------------------|
