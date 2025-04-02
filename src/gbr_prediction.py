@@ -21,55 +21,55 @@ def train_gbr():
     from partitions p
     inner join graphs g on p.graph_id  = g.id
     where nr_of_nodes in (100,200)
-    #and branching_factor in (0.1, 0.25, 0.5, 0.75)
+    #and edge_probability in (0.1, 0.25, 0.5, 0.75)
     and g.id > 1045
     group by g.id
-    having sum(round(gamma_coef_total/lambda_est,4)) >= 0.75
+    having sum(round(lambda_total/lambda_est,4)) >= 0.75
     union all
     select g.id
     from partitions p
     inner join graphs g on p.graph_id  = g.id
     where nr_of_nodes in  (300,400,500,600,700,800,900,1000,1200,1400,1600,1800,2000,2500,3000,3500,4000)
-    #and branching_factor in (0.1, 0.25, 0.5, 0.75)
+    #and edge_probability in (0.1, 0.25, 0.5, 0.75)
     and g.id > 1045
     group by g.id
-    having sum(round(gamma_coef_total/lambda_est,4)) >= 0.195 
+    having sum(round(lambda_total/lambda_est,4)) >= 0.195 
     ),
     p1 as (
-    select min(p.inter_edges) as min_edges,
+    select min(p.qa_inter_edges) as min_edges,
         p.graph_id
     from p0 
     inner join partitions p on p.graph_id = p0.graph_id
     where 1=1 
     and p.comp_type = "hybrid"
-    and p.inter_edges < 1000000
+    and p.qa_inter_edges < 1000000
     group by p.graph_id),
     p as (
-    select max(p2.gamma_coef_total) as max_gamma_coef_total,
-        min(p2.gamma_coef_total) as min_gamma_coef_total,
+    select max(p2.lambda_total) as max_lambda_total,
+        min(p2.lambda_total) as min_lambda_total,
         p1.graph_id,
         p1.min_edges
     from p1 
     inner join partitions p2 on p1.graph_id = p2.graph_id
-                        and p1.min_edges = p2.inter_edges
+                        and p1.min_edges = p2.qa_inter_edges
     where  1=1 
-    and p2.inter_edges < 1000000
+    and p2.qa_inter_edges < 1000000
     group by p1.graph_id, p1.min_edges
     )
     select g.id, g.nr_of_nodes, g.nr_of_edges, 
-    g.branching_factor, g.density,
-    g.pymetis_inter_edges, g.balanced_kernighan_lin_with_inter_edges,
+    g.edge_probability, g.density,
+    g.pymetis_inter_edges, g.kernighan_lin_inter_edges,
     p.min_edges, 
-    g.lambda_est,p.min_gamma_coef_total, p.max_gamma_coef_total,
-    round(p.min_gamma_coef_total / g.lambda_est,3) as min_gamma_coef,
-    round(p.max_gamma_coef_total / g.lambda_est,3) as max_gamma_coef,
-    case when p.min_edges <= g.pymetis_inter_edges #and p.min_edges <= g.balanced_kernighan_lin_with_inter_edges
+    g.lambda_est,p.min_lambda_total, p.max_lambda_total,
+    round(p.min_lambda_total / g.lambda_est,3) as min_gamma_coef,
+    round(p.max_lambda_total / g.lambda_est,3) as max_gamma_coef,
+    case when p.min_edges <= g.pymetis_inter_edges #and p.min_edges <= g.kernighan_lin_inter_edges
     then 1 else 0 end as hybrid_best
     from graphs g
     inner join p on p.graph_id = g.id
     where g.id > 1045
     and g.nr_of_edges is not null 
-    and round(p.min_gamma_coef_total / g.lambda_est,3)  is not null
+    and round(p.min_lambda_total / g.lambda_est,3)  is not null
     order by id desc """
 
     df_for_regression = pd.read_sql(query_for_regression, con=engine)
