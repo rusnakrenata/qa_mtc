@@ -13,7 +13,10 @@ We evaluate the proposed method on a large dataset of randomly generated Erd≈ës‚
 ## Setup
 (recommended: Visual Studio Code)
 ```
+[Git Bash]
 git clone https://github.com/rusnakrenata/qambp.git
+
+[PowerShell/Command Prompt]
 cd src
 python -m venv .env
 .env\Scripts\activate
