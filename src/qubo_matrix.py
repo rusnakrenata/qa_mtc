@@ -1,30 +1,40 @@
 from collections import defaultdict
 from itertools import combinations
 
-def generate_qubo_matrix(G, lambda_par):
+
+def generate_qubo_matrix(n, t, w, lambda_par):
     """
-    Construct the QUBO matrix for the graph partitioning problem.
+    Construct the QUBO matrix for the car-to-trase assignment problem.
 
     Parameters:
-        G: NetworkX graph
-        lambda_par: Penalty coefficient for balancing
+        n: Number of cars
+        t: Number of trases
+        w: 3D list of weights w[i][j][k] representing the congestion cost if cars i and j take trase k
+        lambda_par: Penalty coefficient for assignment constraint
 
     Returns:
-        Q: QUBO matrix as a dictionary
+        Q: QUBO matrix as a defaultdict(int)
     """
     Q = defaultdict(int)
 
-    # Encourage different labels for connected nodes (cut edges)
-    for i, j in list(G.edges()):
-        Q[(i, i)] += 1
-        Q[(j, j)] += 1
-        Q[(i, j)] += -2
+    # Step 1: Congestion penalty (encourage cars to avoid same congested trase)
+    for k in range(t):
+        for i, j in combinations(range(n), 2):
+            q1 = i * t + k
+            q2 = j * t + k
+            Q[(q1, q2)] += w[i][j][k]
 
-    # Add balancing terms to penalize unbalanced partitions
-    for i in G.nodes:
-        Q[(i, i)] += lambda_par * (1 - len(G.nodes))
+    # Step 2: Assignment constraint (each car must take exactly one trase)
+    for i in range(n):
+        # Linear terms from expanding (sum_k x_i^k - 1)^2
+        for k in range(t):
+            q = i * t + k
+            Q[(q, q)] += lambda_par * (1 - 2)  # x^2 - 2x → +1 -2 in the expansion
 
-    for i, j in combinations(G.nodes, 2):
-        Q[(i, j)] += 2 * lambda_par
+        # Quadratic terms from x_i^k1 * x_i^k2
+        for k1, k2 in combinations(range(t), 2):
+            q1 = i * t + k1
+            q2 = i * t + k2
+            Q[(q1, q2)] += 2 * lambda_par
 
     return Q
