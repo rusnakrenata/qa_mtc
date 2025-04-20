@@ -80,7 +80,19 @@ The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
 # lambda_penalty = penalty coefficient
 
 
-#Step 1: Initialize Q as an empty dictionary
+# Step 0: Compute congestion weights `w[i][j][k]`:
+
+    - Use **OpenStreetMap** (via the `osmnx` Python library) to download the city road network graph `G_city`
+    - Generate `n` car origin-destination (OD) pairs randomly within the graph boundary
+    - For each car `i`, use the **Google Maps Directions API** to obtain `k = 3` alternative routes for the same OD pair
+    - For each pair of cars `(i, j)` and each route index `k`, compute `w[i][j][k]` as:
+
+        `w[i][j][k] = number of shared road segments (edges) between x_i^k and x_j^k`
+
+    - This captures how much overlap (congestion potential) exists if both cars take the same route index `k`
+
+
+# Step 1: Initialize Q as an empty dictionary
 
 # Step 2: Congestion penalty (encourage cars to avoid same congested trase)
     for k in range(t):
