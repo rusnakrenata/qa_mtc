@@ -1,144 +1,145 @@
-# Quantum Annealing for Minimum Bisection Problem: A Machine Learning-based Approach for Penalty Parameter Tuning
+# Minimizing Traffic Congestion via QUBO Formulation: Car-to-Trase Assignment Problem
 [[PAPER]]() 
 
-The project QaMBP is the implementation of two experiments: <br>
-I. QUBO penalty parameter tuning using GBR, <br>
-II. Testing the solution quality of proposed QUBO formulation using D-Wave Systems' quatum annealing solvers.
 
-## Abstract
-Minimum Bisection Problem is a fundamental NP-hard problem in combinatorial optimization with applications in parallel computing, network design, and machine learning. This paper explores the feasibility and performance of using D-Wave Systems’ quantum annealing technology to solve the Minimum Bisection Problem, formulated as a Quadratic Unconstrained Binary Optimization model. A central challenge in such formulations is the selection of the penalty parameter, which significantly influences solution quality and constraint satisfaction.
-To address this challenge, we propose a novel machine learning-based approach for adaptive penalty parameter tuning using Gradient Boosting Regressor model. The method predicts penalty values based on graph properties such as the number of nodes, and edge density, allowing for dynamic adjustment tailored to each instance of the problem. This enables hybrid quantum-classical solvers to more effectively balance the goal of minimizing cut size with maintaining equal partition sizes.
-We evaluate the proposed method on a large dataset of randomly generated Erdős–Rényi graphs with up to 4000 nodes and compare the results with classical partitioning algorithms, Metis and Kernighan–Lin. Experimental findings demonstrate that our adaptive tuning strategy significantly improves the performance of hybrid quantum-classical solvers and consistently outperforms used classical methods, indicating its potential as an alternative for large-scale graph partitioning problem.
 
-## Setup
-(recommended: Visual Studio Code)
+## 1. Introduction
+
+Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined trases (routes), such that each car selects exactly one trase, while minimizing overall congestion caused by multiple cars sharing the same trase. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
+
+---
+
+## 2. Problem Definition
+
+We are given:
+
+- `n` cars, indexed `i = 0, ..., n - 1`
+- `t` trases (routes), indexed `k = 0, ..., t - 1`
+- Binary decision variables `x_i^k ∈ {0, 1}`, where:
+  - `x_i^k = 1` if car `i` is assigned to trase `k`
+  - `x_i^k = 0` otherwise
+
+**Assignment constraint:**  
+Each car must be assigned to exactly one trase:
+
+    ∑_{k=0}^{t-1} x_i^k = 1    for all i
+
+We also define a congestion cost `w(i, j, k)`, representing the penalty if both cars `i` and `j` are assigned to the same trase `k`.
+
+
+---
+
+## 3. Objective Function
+
+The total congestion cost is modeled as a quadratic function over the binary variables:
+
+    f(x) = ∑_{k=0}^{t-1} ∑_{0 ≤ i < j < n} w(i, j, k) · x_i^k · x_j^k
+
+This function penalizes combinations of cars assigned to the same congested trase, encouraging distribution across less crowded paths.
+
+---
+
+## 4. Constraint Enforcement via Penalty Term
+
+To enforce that each car takes exactly one trase, we use a penalty function:
+
+    P(x) = λ · ∑_{i=0}^{n-1} ( ∑_{k=0}^{t-1} x_i^k - 1 )²
+
+Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion.
+
+---
+
+## 5. Full QUBO Objective
+
+The total function to minimize becomes:
+
+    F(x) = f(x) + P(x)
+
+This is a fully quadratic, unconstrained objective suitable for QUBO solvers such as those provided by D-Wave.
+
+
+## 6. Variable Flattening and Index Mapping
+
+To express the problem in a QUBO matrix form, we flatten the `x_i^k` variables into a 1D binary vector `x_q` using:
+
+    q = i · t + k
+
+Each car-trase pair `(i, k)` is assigned a unique index `q ∈ {0, 1, ..., n·t - 1}`.  
+The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
+
+    F(x) = xᵀ · Q · x
+
+
+## 7. Algorithm: QUBO Matrix Construction
+
 ```
-[Git Bash]
-git clone https://github.com/rusnakrenata/qambp.git
+# Inputs:
+# n = number of cars
+# t = number of trases
+# w[i][j][k] = congestion weight for cars i and j on trase k
+# lambda_penalty = penalty coefficient
 
-[PowerShell/Command Prompt]
-cd src
-python -m venv .env
-.env\Scripts\activate
-pip install -r requirements.txt
-# python run main.py
+
+#Step 1: Initialize Q as an empty dictionary
+
+# Step 2: Congestion penalty (encourage cars to avoid same congested trase)
+    for k in range(t):
+        for i, j in combinations(range(n), 2):
+            q1 = i * t + k
+            q2 = j * t + k
+            Q[(q1, q2)] += w[i][j][k]
+
+# Step 8: Assignment constraint (each car must take exactly one trase)
+    for i in range(n):
+        # Linear terms from expanding (sum_k x_i^k - 1)^2
+        for k in range(t):
+            q = i * t + k
+            Q[(q, q)] += lambda_penalty * (1 - 2)  # x^2 - 2x → +1 -2 in the expansion
+
+        # Quadratic terms from x_i^k1 * x_i^k2
+        for k1, k2 in combinations(range(t), 2):
+            q1 = i * t + k1
+            q2 = i * t + k2
+            Q[(q1, q2)] += 2 * lambda_penalty
 ```
-<br>
 
+## 8. Complexity Analysis
 
-## 1. Penalty Parameter Calibration and QA Testing
+- **Number of variables:** `N = n · t`
+- **QUBO matrix size:** `O(N²)` in the dense case
+- The original assignment problem has `t^n` valid solutions, making it **exponential in n**
+- The QUBO formulation does **not reduce complexity** but transforms the problem into a form that can be handled by specialized solvers
+- The problem remains **NP-hard**, but the QUBO structure makes it solvable using:
+  - Quantum annealing (e.g., D-Wave)
+  - Classical heuristics (e.g., simulated annealing, tabu search)
 
-<img src="qambp_images/process_diagram.png"/><br>
+---
 
-Fig. 1. Proposed approach for penalty parameter tuning. Given graph *G(n,p)* prepare QUBO matrix <em><b>Q<sub>G,λ</sub></b></em> for MBP and given penalty parameter λ. Test the formulation using D-Wave QA HS, Metis and Kerninghan-lin algorithms, and store data in MariaDB. Analyse the results (solution feasibility and accuracy) and recalculate λ if necessary.
+## 9. QUBO Output and Integration
 
-### 1.1. MBP QUBO Formulation and Matrix 
+The resulting dictionary `Q[(q1, q2)]` constructed using the algorithm in Section 7 represents the full QUBO matrix. This output is compatible with quantum and hybrid solvers.
 
-MBP QUBO Formulation: <br>
-<br>
-![MBP energy equation](https://latex.codecogs.com/png.image?\dpi{110}E_{\text{MBP}}(\mathbf{x})%20=%20\sum_{(i,j)%20\in%20E}%20(x_i%20+%20x_j%20-%202x_ix_j)%20+%20\lambda%20\left(%20\sum_{i%20\in%20V}%20x_i%20-%20\frac{n}{2}%20\right)^2)
+For example, with **D-Wave's Ocean SDK**, you can directly load it as:
 
-Penalty parameter estimation: <br>
-<br>
-![lambda equation](https://latex.codecogs.com/png.image?\dpi{110}\lambda%20=%20\frac{1%20+%20\min(\max(\deg(G)),%20\frac{n}{2}%20-%201)}{2})
+```python
+from dimod import BinaryQuadraticModel
 
-QUBO Matrix:
+bqm = BinaryQuadraticModel.from_qubo(Q)
 ```
-1. Initialize Q_{G,λ} as an empty matrix
 
-2. Update Q_{G,λ} with coefficients from E_cut(x):
-   For each edge (i, j) in E:
-       Q[i, i] ← Q[i, i] + 1
-       Q[j, j] ← Q[j, j] + 1
-       Q[i, j] ← Q[i, j] - 2
+## 10. Novelty and Contribution
 
-3. Update Q_{G,λ} with coefficients from E_balance(x):
-   For each node i in V:
-       Q[i, i] ← Q[i, i] + λ(1 - n)
+Existing systems such as Google Maps and Waze perform real-time routing based on individual travel time optimization. While effective for user-level navigation, these systems do not coordinate across multiple vehicles, which can lead to **unintended congestion** as many users are directed to the same route.
 
-   For each pair of nodes (i, j), where i ≠ j:
-       Q[i, j] ← Q[i, j] + 2λ
+Classical transportation planning tools (e.g., VISUM, TransCAD) optimize traffic assignments using equilibrium models but are primarily designed for **long-term forecasting** rather than **real-time, dynamic allocation**.
 
-```
-<br>
+In contrast, our approach formulates the **car-to-trase assignment problem** as a **Quadratic Unconstrained Binary Optimization (QUBO)** problem. The key novelties of our method include:
 
+- **Coordinated vehicle routing** using a global objective function
+- **Congestion-aware modeling** via pairwise weights `w(i, j, k)` that penalize cars assigned to the same trase
+- **Constraint enforcement** through penalty terms that guarantee each car is assigned exactly one trase
+- Compatibility with **quantum annealing hardware** (e.g., D-Wave), allowing execution on specialized solvers for combinatorial optimization
+- Applicability to **multi-agent systems**, autonomous vehicle coordination, and real-time traffic distribution
 
-
-### 1.2. QA Testing
-MBP QUBO formulation and penalty parameter tuning was tested using D-Wave Systems' hybrid solver through the Leap cloud platform, accessed via the LeapHybridSampler class in the Ocean SDK.
-We used BinaryQuadraticModel for hybrid testing and EmbeddingComposite(DWaveSampler()) for QPU testing.<br>
-
-
-### 1.3. Benchmark algorithms
-To assess the effectiveness of QA HS, we used two well-established classical partitioning algorithms—Metis and Kernighan-Lin—as benchmarks. Metis, based on multilevel recursive bisection, is known for its efficiency in handling large-scale graphs, and we used its Python implementation, PyMetis, for our testing. For the Kernighan-Lin algorithm, we implemented the method ourselves in Python, as this allowed us to enforce a balanced solution by ensuring that the algorithm started with two equally sized sets before the first node assignment change. This adjustment was made to maintain fairness in comparison with QA HS, which inherently optimizes for balanced partitions.<br>
-
-
-## 2. QUBO penalty parameter tuning using GBR
-<br>
-
-### 2.1. Training the GBR model
-```
-1. Extract collected graph properties and partitioning results (λ_min and λ_max) from the database.
-
-2. Compute features: 
-   - n (number of nodes)
-   - ρ (graph density)
-   - λ_est (estimated penalty parameter)
-
-3. Train two Gradient Boosting Regressors (gbr_min, gbr_max) to predict λ_min and λ_max.
-
-4. Evaluate models using:
-   - RMSE (Root Mean Squared Error)
-   - MAE (Mean Absolute Error)
-   - R² score
-
-5. Save trained models for future predictions.
-```
-<br>
-
-### 2.2. Predicting λ for new graphs
-```
-1. Compute λ_est = (1 + min(n/2 - 1, max(deg(G)))) / 2 for new graph G(n, p).
-
-2. Construct feature vector:
-   f = (n, ρ, λ_est)
-
-3. Predict λ_min and λ_max using trained regressors (gbr_min, gbr_max).
-
-4. Compute final λ:
-   λ = λ_est * (λ_min + λ_max) / 2
-```
-<br>
-
-## 3. Graph generation
-The MBP problem was tested on graphs created using the Erdős–Rényi *G(n, p)* model, where *n* represents the number of nodes, and *p* is the probability of an edge existing between any two nodes, which controls the overall graph density.
-
-Tested values:
-- *n* ∈ {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2500, 3000, 4000}
-- *p* ∈ {0.1, 0.25, 0.5, 0.75}
-
-<br>
-
-
-## 📁 Project Structure Overview (src)
-
-| File                         | Purpose / Description                                                                 |
-|------------------------------|----------------------------------------------------------------------------------------|
-| `main.py`                    | Entry point of the application. Generates graphs, runs partitioning, and stores results. |
-| `database_tables.py`         | SQLAlchemy model definitions for `Graph` and `Partition` tables. Manages DB connection. |
-| `graph_generation.py`        | Generates random graphs and computes basic properties like density, clustering, etc.     |
-| `kerninghan_lin.py`          | Implements the Kernighan–Lin algorithm for graph partitioning.                          |
-| `kerninghan_lin_testing.py`  | Wraps Kernighan–Lin logic with timing and formatting for result storage.                |
-| `pymetis_testing.py`         | Uses PyMetis to partition graphs and compute intra/inter-community edges.               |
-| `qa_testing.py`              | Executes QUBO-based graph partitioning using D-Wave samplers (QPU, hybrid, classical).   |
-| `qubo_matrix.py`             | Constructs the QUBO matrix representation from graph topology and lambda.                |
-| `store_into_db.py`           | Stores graph metadata and QUBO partitioning results into the database.                  |
-| `gbr_prediction.py`          | Trains and uses gradient boosting models to estimate lambda parameter ranges.           |
-
-
-
-
-
-
-
+This formulation bridges the gap between high-level traffic assignment models and real-time routing needs, offering a scalable, intelligent traffic control mechanism that is both rigorous and deployable.
 
