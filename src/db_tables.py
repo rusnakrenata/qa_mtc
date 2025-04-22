@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, desc
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -31,25 +31,43 @@ class City(Base):
     __tablename__ = 'cities'
     
     id = Column(Integer, primary_key=True)
-    name = Column(String(255), unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default= datetime.utcnow)
+    node_count = Column(Integer)
+    edge_count = Column(Integer)
 
-    cars = relationship("Car", back_populates="city")
+    run_configs = relationship("RunConfig", back_populates="city")
 
 class Car(Base):
     __tablename__ = 'cars'
-    
+
     id = Column(Integer, primary_key=True)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    car_id = Column(BigInteger, nullable=False)
+    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)  # Link to RunConfig
+    iteration_id = Column(Integer, nullable=False)
     src_node = Column(BigInteger)
     dst_node = Column(BigInteger)
     src_lat = Column(Float)
     src_lon = Column(Float)
     dst_lat = Column(Float)
     dst_lon = Column(Float)
+
+    run_configs = relationship("RunConfig", back_populates="cars")
+    
+class RunConfig(Base):
+    __tablename__ = 'run_configs'
+
+    id = Column(Integer, primary_key=True)
+    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    n_cars = Column(Integer)
+    k_alternatives = Column(Integer)
+    min_length = Column(Integer)
+    max_length = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    city = relationship("City", back_populates="cars")
+    city = relationship("City", back_populates="run_configs")
+    cars = relationship("Car", back_populates="run_configs")
+    
 
 
 
