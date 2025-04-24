@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, desc
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, desc
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -32,9 +32,9 @@ class City(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default= datetime.utcnow)
     node_count = Column(Integer)
     edge_count = Column(Integer)
+    created_at = Column(DateTime, default= datetime.utcnow)
 
     run_configs = relationship("RunConfig", back_populates="city")
 
@@ -47,10 +47,11 @@ class Car(Base):
     iteration_id = Column(Integer, nullable=False)
     src_node = Column(BigInteger)
     dst_node = Column(BigInteger)
-    src_lat = Column(Float)
-    src_lon = Column(Float)
-    dst_lat = Column(Float)
-    dst_lon = Column(Float)
+    src_lat = Column(Numeric(9, 6))  # 6 decimal places
+    src_lon = Column(Numeric(9, 6))
+    dst_lat = Column(Numeric(9, 6))
+    dst_lon = Column(Numeric(9, 6))
+    created_at = Column(DateTime, default= datetime.utcnow)
 
     run_configs = relationship("RunConfig", back_populates="cars")
     
@@ -68,7 +69,20 @@ class RunConfig(Base):
     city = relationship("City", back_populates="run_configs")
     cars = relationship("Car", back_populates="run_configs")
     
+class CarRoute(Base):
+    __tablename__ = 'car_routes'
 
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    iteration_id = Column(Integer, nullable=False)  # same as on Car
+    route_index = Column(Integer, nullable=False)
+    geometry = Column(JSON)  # list of lat/lon pairs
+    duration = Column(Integer)
+    distance = Column(Integer)
+    duration_in_traffic = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    car = relationship("Car", backref="car_routes")
 
 
 

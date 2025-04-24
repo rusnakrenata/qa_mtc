@@ -1,6 +1,7 @@
 from db_tables import *
 from city_map import store_in_db_city
 from generate_cars import store_in_db_cars
+from generate_routes import store_in_db_car_routes
 from sqlalchemy.orm import sessionmaker
 
 # ---------- CONFIGURATION ----------
@@ -28,8 +29,8 @@ existing_run = session.query(RunConfig).filter_by(
 ).first()
 
 if existing_run:
-    run_id = existing_run.id
-    print(f" Run config already exists (run_id={run_id}), skipping insertion.")
+    RUN_ID = existing_run.id
+    print(f" Run config already exists (run_id={RUN_ID}), skipping insertion.")
 else:
     run_config = RunConfig(
         city_id=city.id,
@@ -40,11 +41,14 @@ else:
     )
     session.add(run_config)
     session.commit()
-    run_id = run_config.id
-    print(f" Run configuration saved (run_id={run_id}).")
+    RUN_ID = run_config.id
+    print(f" Run configuration saved (run_id={RUN_ID}).")
 
 
-# 3. Store cars only if the run is new (or always, if you want to re-generate them)
-store_in_db_cars(G, N_CARS, MAX_LENGTH, MIN_LENGTH, run_id)
+# 3. Store cars for iteration (iteration_is is generated in the cars procedure for each run_config)
+CARS, ITERATION_ID = store_in_db_cars(G, N_CARS, MAX_LENGTH, MIN_LENGTH, RUN_ID)
+
+# Store CAR routes in db for the specific iteration ID
+store_in_db_car_routes(CARS, API_KEY, K_ALTERNATIVES, RUN_ID, ITERATION_ID)
 
 session.close()
