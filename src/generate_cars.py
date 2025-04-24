@@ -80,3 +80,4 @@ def store_in_db_cars(G, n, max_dist_m, min_dist_m, run_id):
     session.close()
 
     print(f"Stored  run #{run_id}, and {len(cars)} cars.")
+    return cars, next_iteration
