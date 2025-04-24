@@ -84,6 +84,18 @@ class CarRoute(Base):
 
     car = relationship("Car", backref="car_routes")
 
+class CongestionScore(Base):
+    __tablename__ = 'congestion_scores'
+
+    id = Column(Integer, primary_key=True)
+    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    route_index = Column(Integer, nullable=False)
+    run_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    car = relationship("Car", backref="congestion_scores")
 
 
 

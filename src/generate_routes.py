@@ -97,3 +97,4 @@ def store_in_db_car_routes(cars, api_key, K_ALTERNATIVES, run_id, iteration_id):
     session.commit()
     session.close()
     print("All car routes stored.")
+    return all_car_routes
