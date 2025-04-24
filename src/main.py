@@ -1,5 +1,5 @@
 from db_tables import *
-from city_map import store_in_db_city
+from generate_city_map import store_in_db_city
 from generate_cars import store_in_db_cars
 from generate_routes import store_in_db_car_routes
 from comupte_congestion import store_in_db_congestion_scores
