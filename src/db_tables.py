@@ -131,6 +131,17 @@ class CongestionWeight(Base):
     car_j = relationship("Car", foreign_keys=[car_j_id])
 
 
+class SegmentAssignment(Base):
+    __tablename__ = 'segment_assignments'
+
+    id = Column(Integer, primary_key=True)
+    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    run_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    segment_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    car = relationship("Car")
 
 ####### --TABLES-- #######
 
