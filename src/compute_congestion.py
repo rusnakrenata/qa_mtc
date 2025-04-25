@@ -2,26 +2,36 @@ from collections import defaultdict
 from sqlalchemy.orm import sessionmaker
 from db_tables import *
 
-def compute_route_overlap_congestion(car_routes, precision=5):
-    """
-    Calculates congestion score based on overlapping route points,
-    considering direction and avoiding duplicate route contributions per car.
+def compute_route_overlap_congestion(car_routes, run_id, iteration_id, precision=5, traffic_light_weight = 0.25):
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-    Returns:
-        congestion_scores: dict {(car_id, route_index): congestion_score}
-        point_freq: dict {point: number of unique cars using the point}
-    """
+    # Get the city ID from the run configuration
+    run_config = session.query(RunConfig).filter_by(id=run_id).first()
+    city_id = run_config.city_id
+
+    # Load all traffic lights for that city
+    traffic_lights = session.query(TrafficLight).filter_by(city_id=city_id).all()
+    session.close()
+
+    # Build penalty lookup: (rounded_lat, rounded_lon) -> penalty (normalized)
+    light_penalty = {}
+    for light in traffic_lights:
+        key = (round(light.lat, precision), round(light.lon, precision))
+        penalty = (light.red_cycle / 60.0) * traffic_light_weight  # Normalize: 60s red = 1.0 penalty
+        light_penalty[key] = penalty
+
+    # --- Step 1: Unique routes per car (directional) ---
     point_to_cars = defaultdict(set)
-
-    # Step 1: Collect unique (directed) routes per car
     unique_routes_per_car = defaultdict(set)
+
     for car in car_routes:
         car_id = car['car_id']
         for route in car.get('routes', []):
             rounded_route = tuple((round(lat, precision), round(lon, precision)) for lat, lon in route['geometry'])
             unique_routes_per_car[car_id].add(rounded_route)
 
-    # Step 2: Register points used in unique routes (directional)
+    # --- Step 2: Frequency of cars per point ---
     for car_id, unique_routes in unique_routes_per_car.items():
         seen_points = set()
         for route in unique_routes:
@@ -30,10 +40,9 @@ def compute_route_overlap_congestion(car_routes, precision=5):
                     point_to_cars[point].add(car_id)
                     seen_points.add(point)
 
-    # Step 3: Compute frequency per point
     point_freq = {pt: len(cars) for pt, cars in point_to_cars.items()}
 
-    # Step 4: Compute average congestion score per car/route
+    # --- Step 3: Congestion score = overlap + red light penalties ---
     congestion_scores = {}
     for car in car_routes:
         car_id = car['car_id']
@@ -41,7 +50,9 @@ def compute_route_overlap_congestion(car_routes, precision=5):
             total = 0
             for lat, lon in route['geometry']:
                 key = (round(lat, precision), round(lon, precision))
-                total += point_freq.get(key, 0)
+                base = point_freq.get(key, 0)
+                penalty = light_penalty.get(key, 0)
+                total += base + penalty
             avg_congestion = total / max(len(route['geometry']), 1)
             congestion_scores[(car_id, idx)] = avg_congestion
 
@@ -50,11 +61,12 @@ def compute_route_overlap_congestion(car_routes, precision=5):
 
 
 
+
 def store_in_db_congestion_scores(car_routes, run_id, iteration_id):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    congestion_scores, _ = compute_route_overlap_congestion(car_routes, precision=5)
+    congestion_scores, _ = compute_route_overlap_congestion(car_routes, run_id, iteration_id, precision=5)
     for (car_logical_id, route_index), score in congestion_scores.items():
         # Find the internal Car.id for this car_id
         car_obj = session.query(Car).filter_by(
