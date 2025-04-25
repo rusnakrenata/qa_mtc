@@ -3,12 +3,14 @@ from generate_city_map import store_in_db_city
 from generate_cars import store_in_db_cars
 from generate_routes import store_in_db_car_routes
 from compute_congestion import store_in_db_congestion_scores
+from visualize_congestion import visualize_routes_by_overlap_congestion
+from compute_weights import store_in_db_weights
 from sqlalchemy.orm import sessionmaker
 
 # ---------- CONFIGURATION ----------
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Košice, Slovakia"
-N_CARS = 100
+N_CARS = 5
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 5000
@@ -54,5 +56,12 @@ CAR_ROUTES = store_in_db_car_routes(CARS, API_KEY, K_ALTERNATIVES, RUN_ID, ITERA
 
 # Calculate and store Congestion Scores
 CONGESTION_SCORES = store_in_db_congestion_scores(CAR_ROUTES, RUN_ID, ITERATION_ID)
+
+
+# Step 2: Visualize map
+map_overlap = visualize_routes_by_overlap_congestion(CAR_ROUTES, CONGESTION_SCORES)
+map_overlap.save("routes_by_overlap_congestion.html")
+
+WEIGHTS = store_in_db_weights(CONGESTION_SCORES, RUN_ID, ITERATION_ID)
 
 session.close()
