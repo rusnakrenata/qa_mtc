@@ -5,12 +5,13 @@ from generate_routes import store_in_db_car_routes
 from compute_congestion import store_in_db_congestion_scores
 from visualize_congestion import visualize_routes_by_overlap_congestion
 from compute_weights import store_in_db_weights
+from compute_segments import store_in_db_segment_assignments
 from sqlalchemy.orm import sessionmaker
 
 # ---------- CONFIGURATION ----------
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Košice, Slovakia"
-N_CARS = 5
+N_CARS = 3
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 5000
@@ -63,5 +64,7 @@ map_overlap = visualize_routes_by_overlap_congestion(CAR_ROUTES, CONGESTION_SCOR
 map_overlap.save("routes_by_overlap_congestion.html")
 
 WEIGHTS = store_in_db_weights(CONGESTION_SCORES, RUN_ID, ITERATION_ID)
+
+SEGMENTS = store_in_db_segment_assignments(CAR_ROUTES, RUN_ID, ITERATION_ID)
 
 session.close()

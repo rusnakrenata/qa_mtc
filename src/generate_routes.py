@@ -21,9 +21,11 @@ def get_routes_from_google(origin, destination, api_key):
         return response.json()
     return None
 
-def count_unique_traffic_lights_on_route(route_polyline):
+def count_unique_traffic_lights_on_route(route_polyline, run_id, iteration_id):
     Session = sessionmaker(bind=engine)
     session = Session()
+
+    # You can optionally filter lights by city_id if needed later
     lights = session.query(TrafficLight).all()
     traffic_light_points = [(l.id, l.lat, l.lon, l.red_cycle) for l in lights]
     session.close()
@@ -46,7 +48,8 @@ def count_unique_traffic_lights_on_route(route_polyline):
         "total_red_light_wait": total_estimated_wait
     }
 
-def collect_routes(cars, api_key, K_ALTERNATIVES=3):
+
+def collect_routes(cars, api_key, run_id, iteration_id, K_ALTERNATIVES=3):
     all_car_routes = []
 
     for car in cars:
@@ -62,8 +65,8 @@ def collect_routes(cars, api_key, K_ALTERNATIVES=3):
                 duration = leg['duration']['value']
                 distance = leg['distance']['value']
                 traffic_time = leg.get('duration_in_traffic', {}).get('value', duration)
-                
-                light_info = count_unique_traffic_lights_on_route(poly)
+
+                light_info = count_unique_traffic_lights_on_route(poly, run_id, iteration_id)
 
                 car_routes.append({
                     "geometry": poly,
@@ -93,11 +96,13 @@ def collect_routes(cars, api_key, K_ALTERNATIVES=3):
 
     return all_car_routes
 
+
 def store_in_db_car_routes(cars, api_key, K_ALTERNATIVES, run_id, iteration_id):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    all_car_routes = collect_routes(cars, api_key, K_ALTERNATIVES)
+    all_car_routes = collect_routes(cars, api_key, run_id, iteration_id, K_ALTERNATIVES)
+
     for route_data in all_car_routes:
         car_id = route_data["car_id"]
 
@@ -122,7 +127,7 @@ def store_in_db_car_routes(cars, api_key, K_ALTERNATIVES, run_id, iteration_id):
                 duration_in_traffic=route["duration_in_traffic"],
                 traffic_light_count=route["traffic_light_count"],
                 contains_traffic_light=route["contains_traffic_light"],
-                total_red_light_wait=route["total_red_light_wait"]  # NEW
+                total_red_light_wait=route["total_red_light_wait"]
             )
             session.add(car_route)
 
