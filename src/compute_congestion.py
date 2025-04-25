@@ -54,7 +54,7 @@ def store_in_db_congestion_scores(car_routes, run_id, iteration_id):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    congestion_scores = compute_route_overlap_congestion(car_routes, precistion =5)
+    congestion_scores, _ = compute_route_overlap_congestion(car_routes, precision=5)
     for (car_logical_id, route_index), score in congestion_scores.items():
         # Find the internal Car.id for this car_id
         car_obj = session.query(Car).filter_by(

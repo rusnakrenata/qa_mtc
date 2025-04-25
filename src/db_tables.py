@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, desc
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -37,6 +37,19 @@ class City(Base):
     created_at = Column(DateTime, default= datetime.utcnow)
 
     run_configs = relationship("RunConfig", back_populates="city")
+    traffic_lights = relationship("TrafficLight", back_populates="city")
+
+class TrafficLight(Base):
+    __tablename__ = 'traffic_lights'
+
+    id = Column(Integer, primary_key=True)
+    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    lat = Column(Float)
+    lon = Column(Float)
+    red_cycle = Column(Integer, default=30)  # Estimated red light wait time in seconds
+    created_at = Column(DateTime, default= datetime.utcnow)
+
+    city = relationship("City", back_populates="traffic_lights")
 
 class Car(Base):
     __tablename__ = 'cars'
@@ -74,15 +87,19 @@ class CarRoute(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    iteration_id = Column(Integer, nullable=False)  # same as on Car
+    iteration_id = Column(Integer, nullable=False)
     route_index = Column(Integer, nullable=False)
     geometry = Column(JSON)  # list of lat/lon pairs
     duration = Column(Integer)
     distance = Column(Integer)
     duration_in_traffic = Column(Integer)
+    traffic_light_count = Column(Integer)
+    total_red_light_wait = Column(Float)
+    contains_traffic_light = Column(Boolean)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     car = relationship("Car", backref="car_routes")
+
 
 class CongestionScore(Base):
     __tablename__ = 'congestion_scores'

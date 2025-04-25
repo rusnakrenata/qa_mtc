@@ -2,16 +2,16 @@ from db_tables import *
 from generate_city_map import store_in_db_city
 from generate_cars import store_in_db_cars
 from generate_routes import store_in_db_car_routes
-from comupte_congestion import store_in_db_congestion_scores
+from compute_congestion import store_in_db_congestion_scores
 from sqlalchemy.orm import sessionmaker
 
 # ---------- CONFIGURATION ----------
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Košice, Slovakia"
-N_CARS = 1000
+N_CARS = 100
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
-MAX_LENGTH = 2000
+MAX_LENGTH = 5000
 
 Session = sessionmaker(bind=engine)
 session = Session()
