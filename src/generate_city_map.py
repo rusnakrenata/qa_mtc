@@ -1,3 +1,4 @@
+# generate_map_with_lights.py
 import osmnx as ox
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -12,16 +13,14 @@ def store_in_db_city(city_name):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    # Check if city already exists
     city = session.query(City).filter_by(name=city_name).first()
 
     if city:
         print(f" City '{city_name}' already exists in the database.")
         session.close()
-        G = get_city_graph(city_name)  # still return the graph for usage
+        G = get_city_graph(city_name)
         return G
 
-    # City not found — generate graph and insert
     print(f" Generating and storing new city '{city_name}'...")
     G = get_city_graph(city_name)
 
@@ -35,8 +34,25 @@ def store_in_db_city(city_name):
         created_at=datetime.utcnow()
     )
     session.add(city)
+
+    city_added = session.query(City).filter_by(name=city_name).first()
+
+    # Store traffic lights from OSM
+    lights = ox.features_from_place(city_name, tags={'highway': 'traffic_signals'})
+    for _, row in lights.iterrows():
+        if 'geometry' in row:
+            lat = row.geometry.y
+            lon = row.geometry.x
+            traffic_light = TrafficLight(
+                city_id=city_added.id,
+                lat=lat,
+                lon=lon,
+                created_at=datetime.utcnow()
+            )
+            session.add(traffic_light)
+
     session.commit()
     session.close()
 
-    print(f" City '{city_name}' saved with {node_count} nodes and {edge_count} edges.")
+    print(f" City '{city_name}' saved with {node_count} nodes and {edge_count} edges and traffic lights.")
     return G
