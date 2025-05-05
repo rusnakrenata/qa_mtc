@@ -152,8 +152,34 @@ class CongestionScore(Base):
 
     car = relationship("Car", backref="congestion_scores")
 
+class CongestionWeight(Base):
+    __tablename__ = 'congestion_weights'
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    car_i_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    car_j_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    route_index = Column(Integer, nullable=False)
+    weight = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Optional: relationships to Car if you want SQLAlchemy backrefs
+    car_i = relationship("Car", foreign_keys=[car_i_id])
+    car_j = relationship("Car", foreign_keys=[car_j_id])
 
 
+class SegmentAssignment(Base):
+    __tablename__ = 'segment_assignments'
+
+    id = Column(Integer, primary_key=True)
+    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+    run_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    segment_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    car = relationship("Car")
 
 ####### --TABLES-- #######
 
