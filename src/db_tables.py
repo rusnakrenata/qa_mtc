@@ -27,6 +27,7 @@ except Exception as e:
 
 Base = declarative_base()
 
+
 class City(Base):
     __tablename__ = 'cities'
     
@@ -38,6 +39,43 @@ class City(Base):
 
     run_configs = relationship("RunConfig", back_populates="city")
     traffic_lights = relationship("TrafficLight", back_populates="city")
+
+# ---------- Node Model ----------
+class Node(Base):
+    __tablename__ = 'nodes'
+    
+    id = Column(Integer, primary_key=True)
+    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    x = Column(Float)
+    y = Column(Float)
+    street_count = Column(Integer, nullable=True)
+    highway = Column(String(255), nullable=True)
+    railway = Column(String(255), nullable=True)
+    junction = Column(String(255), nullable=True)
+    
+    geometry = Column(String(255), nullable=True)  # Store as WKT or GeoJSON
+
+# ---------- Edge Model ----------
+class Edge(Base):
+    __tablename__ = 'edges'
+    
+    id = Column(Integer, primary_key=True)
+    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    #osmid = Column(Integer, nullable=False, unique=True)
+    # Removed u, v columns, no longer representing nodes
+    length = Column(String(255), nullable=True)
+    highway = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=True)
+    lanes = Column(String(255), nullable=True)
+    maxspeed = Column(String(255), nullable=True)
+    oneway = Column(String(255), nullable=True)
+    
+    # Added new columns as requested
+    reversed = Column(String(255), nullable=True)
+    
+    # Geometry will be stored as a string (GeoJSON or WKT)
+    geometry = Column(String(255), nullable=True)  # Store as GeoJSON or WKT format for simplicity
+
 
 class TrafficLight(Base):
     __tablename__ = 'traffic_lights'
