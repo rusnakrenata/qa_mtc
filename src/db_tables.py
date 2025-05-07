@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -23,6 +23,11 @@ except Exception as e:
     print(f"Error connecting to MariaDB: {e}")
 
 
+
+with engine.connect() as conn:
+    conn.execute(text("DROP TABLE IF EXISTS nodes"))
+    conn.execute(text("DROP TABLE IF EXISTS edges"))
+
 ####### --TABLES-- #######
 
 Base = declarative_base()
@@ -46,6 +51,7 @@ class Node(Base):
     
     id = Column(Integer, primary_key=True)
     city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    osmid = Column(String(255))
     x = Column(Float)
     y = Column(Float)
     street_count = Column(Integer, nullable=True)
@@ -63,18 +69,13 @@ class Edge(Base):
     city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
     #osmid = Column(Integer, nullable=False, unique=True)
     # Removed u, v columns, no longer representing nodes
+    u = Column(String(255))
+    v = Column(String(255))
     length = Column(String(255), nullable=True)
-    highway = Column(String(255), nullable=True)
-    name = Column(String(255), nullable=True)
-    lanes = Column(String(255), nullable=True)
-    maxspeed = Column(String(255), nullable=True)
-    oneway = Column(String(255), nullable=True)
-    
-    # Added new columns as requested
-    reversed = Column(String(255), nullable=True)
+    #maxspeed = Column(String(255), nullable=True)
     
     # Geometry will be stored as a string (GeoJSON or WKT)
-    geometry = Column(String(255), nullable=True)  # Store as GeoJSON or WKT format for simplicity
+    geometry = Column(String(10000), nullable=True)  # Store as GeoJSON or WKT format for simplicity
 
 
 class TrafficLight(Base):
