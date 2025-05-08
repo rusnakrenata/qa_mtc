@@ -24,7 +24,7 @@ except Exception as e:
 
 
 
-with engine.connect() as conn:
+with engine.connect() as conn:    
     conn.execute(text("DROP TABLE IF EXISTS nodes"))
     conn.execute(text("DROP TABLE IF EXISTS edges"))
 
