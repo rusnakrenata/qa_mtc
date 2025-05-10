@@ -24,9 +24,9 @@ except Exception as e:
 
 
 
-with engine.connect() as conn:    
+""" with engine.connect() as conn:    
     conn.execute(text("DROP TABLE IF EXISTS nodes"))
-    conn.execute(text("DROP TABLE IF EXISTS edges"))
+    conn.execute(text("DROP TABLE IF EXISTS edges")) """
 
 ####### --TABLES-- #######
 
@@ -106,7 +106,35 @@ class Car(Base):
     created_at = Column(DateTime, default= datetime.utcnow)
 
     run_configs = relationship("RunConfig", back_populates="cars")
+
+class Vehicle(Base):
+    __tablename__ = 'vehicles'
+
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)  # Link to RunConfig
+    source_edge_id = Column(Integer, ForeignKey('edges.id'), related_name='source_edge')
+    source_position_on_edge = Column(Float)
+    source_geometry = Column(String(255), nullable=True)
+    destination_edge_id = Column(Integer, ForeignKey('edges.id'),related_name='destination_edge')
+    destination_position_on_edge = Column(Float)
+    destination_geometry = Column(String(255), nullable=True)
     
+
+    
+    
+class Route_point(Base):
+    __tablename__ = 'route_points'
+
+    id = Column(Integer, primary_key=True)
+    vehicle_id = Column(Integer, ForeignKey('vehicles.id'), nullable=False)
+    lat = Column(Float)
+    lon = Column(Float)
+    time = Column(Integer)
+
+
+
+
+  
 class RunConfig(Base):
     __tablename__ = 'run_configs'
 
@@ -117,6 +145,8 @@ class RunConfig(Base):
     min_length = Column(Integer)
     max_length = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
+    time_step = Column(Integer, nullable=False)
+    time_window = Column(Integer, nullable=False)
 
     city = relationship("City", back_populates="run_configs")
     cars = relationship("Car", back_populates="run_configs")
