@@ -42,8 +42,7 @@ class City(Base):
     edge_count = Column(Integer)
     created_at = Column(DateTime, default= datetime.utcnow)
 
-    run_configs = relationship("RunConfig", back_populates="city")
-    traffic_lights = relationship("TrafficLight", back_populates="city")
+    #run_configs = relationship("RunConfig", back_populates="city")
 
 # ---------- Node Model ----------
 class Node(Base):
@@ -57,9 +56,9 @@ class Node(Base):
     street_count = Column(Integer, nullable=True)
     highway = Column(String(255), nullable=True)
     railway = Column(String(255), nullable=True)
-    junction = Column(String(255), nullable=True)
-    
+    junction = Column(String(255), nullable=True)    
     geometry = Column(String(255), nullable=True)  # Store as WKT or GeoJSON
+    created_at = Column(DateTime, default= datetime.utcnow)
 
 # ---------- Edge Model ----------
 class Edge(Base):
@@ -72,10 +71,8 @@ class Edge(Base):
     u = Column(String(255))
     v = Column(String(255))
     length = Column(String(255), nullable=True)
-    #maxspeed = Column(String(255), nullable=True)
-    
-    # Geometry will be stored as a string (GeoJSON or WKT)
     geometry = Column(String(10000), nullable=True)  # Store as GeoJSON or WKT format for simplicity
+    created_at = Column(DateTime, default= datetime.utcnow)
 
 
 class RunConfig(Base):
@@ -87,136 +84,103 @@ class RunConfig(Base):
     k_alternatives = Column(Integer)
     min_length = Column(Integer)
     max_length = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
     time_step = Column(Integer, nullable=False)
     time_window = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default= datetime.utcnow)
 
-    city = relationship("City", back_populates="run_configs")
-    cars = relationship("Car", back_populates="run_configs")
+    #city = relationship("City", back_populates="run_configs")
     
 
 class Vehicle(Base):
     __tablename__ = 'vehicles'
 
     id = Column(Integer, primary_key=True)
+    vehicle_id = Column(BigInteger, nullable=False) 
     run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)  # Link to RunConfig
-    source_edge_id = Column(Integer, ForeignKey('edges.id'), related_name='source_edge')
+    iteration_id = Column(Integer, nullable=False) 
+    source_edge_id = Column(Integer, ForeignKey('edges.id'))#, related_name='source_edge')
     source_position_on_edge = Column(Float)
     source_geometry = Column(String(255), nullable=True)
-    destination_edge_id = Column(Integer, ForeignKey('edges.id'),related_name='destination_edge')
+    destination_edge_id = Column(Integer, ForeignKey('edges.id'))#, related_name='destination_edge')
     destination_position_on_edge = Column(Float)
     destination_geometry = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default= datetime.utcnow)
+
+    #run_configs = relationship("RunConfig", back_populates="vehicles")
     
 class VehicleRoute(Base):
     __tablename__ = 'vehicle_routes'
 
     id = Column(Integer, primary_key=True)
-    vehicle_id = Column(Integer, ForeignKey('vehicles.id'), nullable=False)
+    vehicle_id = Column(Integer, nullable=False) #ForeignKey('vehicles.id'),
+    run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig ForeignKey('run_configs.id'),
+    iteration_id = Column(Integer, nullable=False) 
+    route_id = Column(Integer, nullable=False) 
     duration = Column(Integer)
     distance = Column(Integer)
     duration_in_traffic = Column(Integer)
+    created_at = Column(DateTime, default= datetime.utcnow)
+
     
 class RoutePoint(Base):
     __tablename__ = 'route_points'
 
     id = Column(Integer, primary_key=True)
-    vehicle_route_id = Column(Integer, ForeignKey('vehicle_routes.id'), nullable=False)
+    vehicle_id = Column(Integer,  nullable=False) #ForeignKey('vehicles.id'),
+    run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig ForeignKey('run_configs.id'),
+    iteration_id = Column(Integer, nullable=False) 
+    route_id = Column(Integer, nullable=False) 
+    point_id = Column(Integer,  nullable=False) #ForeignKey('vehicle_routes.id'),
     edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False) # closes edge
     cardinal = Column(String(255), nullable=True) # cardinal direction 
     speed = Column(Float)
     lat = Column(Float)
     lon = Column(Float)
     time = Column(Integer)
-
-class CarRoute(Base):
-    __tablename__ = 'car_routes'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    iteration_id = Column(Integer, nullable=False)
-    route_index = Column(Integer, nullable=False)
-    geometry = Column(JSON)  # list of lat/lon pairs
-    duration = Column(Integer)
-    distance = Column(Integer)
-    duration_in_traffic = Column(Integer)
-    traffic_light_count = Column(Integer)
-    total_red_light_wait = Column(Float)
-    contains_traffic_light = Column(Boolean)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    car = relationship("Car", backref="car_routes")
-
-
-class TrafficLight(Base):
-    __tablename__ = 'traffic_lights'
-
-    id = Column(Integer, primary_key=True)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
-    lat = Column(Float)
-    lon = Column(Float)
-    red_cycle = Column(Integer, default=30)  # Estimated red light wait time in seconds
     created_at = Column(DateTime, default= datetime.utcnow)
 
-    city = relationship("City", back_populates="traffic_lights")
 
-class Car(Base):
-    __tablename__ = 'cars'
+# class CongestionScore(Base):
+#     __tablename__ = 'congestion_scores'
 
-    id = Column(Integer, primary_key=True)
-    car_id = Column(BigInteger, nullable=False)
-    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)  # Link to RunConfig
-    iteration_id = Column(Integer, nullable=False)
-    src_node = Column(BigInteger)
-    dst_node = Column(BigInteger)
-    src_lat = Column(Numeric(9, 6))  # 6 decimal places
-    src_lon = Column(Numeric(9, 6))
-    dst_lat = Column(Numeric(9, 6))
-    dst_lon = Column(Numeric(9, 6))
-    created_at = Column(DateTime, default= datetime.utcnow)
+#     id = Column(Integer, primary_key=True)
+#     car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+#     route_index = Column(Integer, nullable=False)
+#     run_id = Column(Integer, nullable=False)
+#     iteration_id = Column(Integer, nullable=False)
+#     score = Column(Float, nullable=False)
+#     created_at = Column(DateTime, default=datetime.utcnow)
 
-    run_configs = relationship("RunConfig", back_populates="cars")
+#     car = relationship("Car", backref="congestion_scores")
 
-class CongestionScore(Base):
-    __tablename__ = 'congestion_scores'
+# class CongestionWeight(Base):
+#     __tablename__ = 'congestion_weights'
 
-    id = Column(Integer, primary_key=True)
-    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    route_index = Column(Integer, nullable=False)
-    run_id = Column(Integer, nullable=False)
-    iteration_id = Column(Integer, nullable=False)
-    score = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+#     id = Column(Integer, primary_key=True)
+#     run_id = Column(Integer, nullable=False)
+#     iteration_id = Column(Integer, nullable=False)
+#     car_i_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+#     car_j_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+#     route_index = Column(Integer, nullable=False)
+#     weight = Column(Float, nullable=False)
+#     created_at = Column(DateTime, default=datetime.utcnow)
 
-    car = relationship("Car", backref="congestion_scores")
-
-class CongestionWeight(Base):
-    __tablename__ = 'congestion_weights'
-
-    id = Column(Integer, primary_key=True)
-    run_id = Column(Integer, nullable=False)
-    iteration_id = Column(Integer, nullable=False)
-    car_i_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    car_j_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    route_index = Column(Integer, nullable=False)
-    weight = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Optional: relationships to Car if you want SQLAlchemy backrefs
-    car_i = relationship("Car", foreign_keys=[car_i_id])
-    car_j = relationship("Car", foreign_keys=[car_j_id])
+#     # Optional: relationships to Car if you want SQLAlchemy backrefs
+#     car_i = relationship("Car", foreign_keys=[car_i_id])
+#     car_j = relationship("Car", foreign_keys=[car_j_id])
 
 
-class SegmentAssignment(Base):
-    __tablename__ = 'segment_assignments'
+# class SegmentAssignment(Base):
+#     __tablename__ = 'segment_assignments'
 
-    id = Column(Integer, primary_key=True)
-    car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
-    run_id = Column(Integer, nullable=False)
-    iteration_id = Column(Integer, nullable=False)
-    segment_id = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+#     id = Column(Integer, primary_key=True)
+#     car_id = Column(Integer, ForeignKey('cars.id'), nullable=False)
+#     run_id = Column(Integer, nullable=False)
+#     iteration_id = Column(Integer, nullable=False)
+#     segment_id = Column(Integer, nullable=False)
+#     created_at = Column(DateTime, default=datetime.utcnow)
 
-    car = relationship("Car")
+#     car = relationship("Car")
 
 ####### --TABLES-- #######
 
