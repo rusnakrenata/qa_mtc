@@ -74,6 +74,14 @@ class Edge(Base):
     geometry = Column(String(10000), nullable=True)  # Store as GeoJSON or WKT format for simplicity
     created_at = Column(DateTime, default= datetime.utcnow)
 
+class Iteration(Base):
+    __tablename__ = 'iterations'
+
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer)  # Link to RunConfig
+    created_at = Column(DateTime, default= datetime.utcnow)
+
+    #city = relationship("City", back_populates="iterations")
 
 class RunConfig(Base):
     __tablename__ = 'run_configs'
@@ -140,6 +148,17 @@ class RoutePoint(Base):
     created_at = Column(DateTime, default= datetime.utcnow)
 
 
+class CongestionMap(Base):
+    __tablename__ = 'congestion_map'
+
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False)
+    congestion_score = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    
 # class CongestionScore(Base):
 #     __tablename__ = 'congestion_scores'
 
