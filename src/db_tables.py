@@ -78,6 +78,7 @@ class Iteration(Base):
     __tablename__ = 'iterations'
 
     id = Column(Integer, primary_key=True)
+    iteration_id = Column(Integer, nullable=False)
     run_configs_id = Column(Integer)  # Link to RunConfig
     created_at = Column(DateTime, default= datetime.utcnow)
 
