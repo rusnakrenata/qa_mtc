@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text, Numeric
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -13,7 +13,11 @@ db_name = "trafficOptimization"
 connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
 
 # Create SQLAlchemy engine
-engine = create_engine(connection_url)
+engine = create_engine(connection_url,
+    pool_recycle=280,  # seconds (before wait_timeout)
+    pool_pre_ping=True  # check connection before using)
+)
+
 
 # Test connection
 try:
@@ -51,8 +55,8 @@ class Node(Base):
     id = Column(Integer, primary_key=True)
     city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
     osmid = Column(String(255))
-    x = Column(Float)
-    y = Column(Float)
+    x = Column(Numeric(9,6))
+    y = Column(Numeric(9,6))
     street_count = Column(Integer, nullable=True)
     highway = Column(String(255), nullable=True)
     railway = Column(String(255), nullable=True)
@@ -143,8 +147,8 @@ class RoutePoint(Base):
     edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False) # closes edge
     cardinal = Column(String(255), nullable=True) # cardinal direction 
     speed = Column(Float)
-    lat = Column(Float)
-    lon = Column(Float)
+    lat = Column(Numeric(9,6))
+    lon = Column(Numeric(9,6))
     time = Column(Integer)
     created_at = Column(DateTime, default= datetime.utcnow)
 
@@ -204,4 +208,4 @@ class CongestionMap(Base):
 
 ####### --TABLES-- #######
 
-Base.metadata.create_all(engine)
+#Base.metadata.create_all(engine)
