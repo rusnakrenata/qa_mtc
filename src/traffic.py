@@ -2,18 +2,10 @@
  "cells": [
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": 3,
    "id": "52686129",
    "metadata": {},
-   "outputs": [
-    {
-     "name": "stdout",
-     "output_type": "stream",
-     "text": [
-      "Connection to MariaDB successful!\n"
-     ]
-    }
-   ],
+   "outputs": [],
    "source": [
     "# Standard library imports\n",
     "import json\n",
@@ -54,7 +46,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 2,
+   "execution_count": 9,
    "id": "454e6e1d",
    "metadata": {},
    "outputs": [],
@@ -74,7 +66,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 3,
+   "execution_count": 5,
    "id": "5af12866",
    "metadata": {},
    "outputs": [],
@@ -450,7 +442,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 15,
    "id": "6736feeb",
    "metadata": {},
    "outputs": [],
@@ -678,22 +670,6 @@
     "        vehicles = []\n",
     "        vehicle_id = 0\n",
     "\n",
-    "        \n",
-    "        #### added for uniform source and destination selection KMeans \n",
-    "        from sklearn.cluster import KMeans\n",
-    "        def sample_spatially_diverse_edge(edges_gdf, n_clusters=500):\n",
-    "            \"\"\"\n",
-    "            Select a single edge from a spatial cluster to ensure geographic diversity.\n",
-    "            \"\"\"\n",
-    "            edges_proj = edges_gdf.to_crs(epsg=3857)  # Web Mercator projection in meters\n",
-    "            centroids = edges_proj.geometry.centroid\n",
-    "            coords = np.array([[p.x, p.y] for p in centroids])\n",
-    "            kmeans = KMeans(n_clusters=min(n_clusters, len(edges_gdf)), n_init='auto').fit(coords)\n",
-    "            edges_gdf['cluster'] = kmeans.labels_\n",
-    "            sampled_cluster = random.choice(edges_gdf['cluster'].unique())\n",
-    "            return edges_gdf[edges_gdf['cluster'] == sampled_cluster].sample(n=1).iloc[0]\n",
-    "        ####\n",
-    "\n",
     "        for _ in range(self.runConfig.n_cars):\n",
     "            valid_vehicle = False\n",
     "            retries = 0\n",
@@ -703,13 +679,13 @@
     "                retries += 1\n",
     "\n",
     "                # Randomly select a source edge and point\n",
-    "                source_edge = sample_spatially_diverse_edge(self.edges)#self.edges.sample(n=1).iloc[0]\n",
+    "                source_edge = self.edges.sample(n=1).iloc[0]\n",
     "                source_position_on_edge = random.random()\n",
     "                source_line = source_edge['geometry']\n",
     "                source_point = source_line.interpolate(source_position_on_edge, normalized=True)\n",
     "\n",
     "                # Randomly select a destination edge and point\n",
-    "                destination_edge = sample_spatially_diverse_edge(self.edges)#self.edges.sample(n=1).iloc[0]\n",
+    "                destination_edge = self.edges.sample(n=1).iloc[0]\n",
     "                destination_position_on_edge = random.random()\n",
     "                destination_line = destination_edge['geometry']\n",
     "                destination_point = destination_line.interpolate(destination_position_on_edge, normalized=True)\n",
@@ -960,7 +936,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 7,
+   "execution_count": null,
    "id": "8daea76b",
    "metadata": {},
    "outputs": [
@@ -968,38 +944,21 @@
      "name": "stdout",
      "output_type": "stream",
      "text": [
-      "2025-06-02 13:09:53.712840\n",
+      "2025-06-02 12:35:16.624503\n",
       "nodes_query\n",
-      "2025-06-02 13:09:55.888299\n",
+      "2025-06-02 12:35:18.506423\n",
       "edges_query\n",
-      "2025-06-02 13:09:55.889820\n",
+      "2025-06-02 12:35:18.508234\n",
       "nodes_df\n",
-      "2025-06-02 13:09:55.949843\n",
-      " Run config already exists (run_id=2), skipping insertion.\n",
-      "Iteration created (iteration_id=3) for run_config_id=2.\n",
-      "2025-06-02 13:09:56.646624\n"
-     ]
-    },
-    {
-     "ename": "KeyboardInterrupt",
-     "evalue": "",
-     "output_type": "error",
-     "traceback": [
-      "\u001b[31m---------------------------------------------------------------------------\u001b[39m",
-      "\u001b[31mKeyboardInterrupt\u001b[39m                         Traceback (most recent call last)",
-      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[7]\u001b[39m\u001b[32m, line 1\u001b[39m\n\u001b[32m----> \u001b[39m\u001b[32m1\u001b[39m case1=\u001b[43mNavigation\u001b[49m\u001b[43m(\u001b[49m\u001b[43mCITY_NAME\u001b[49m\u001b[43m,\u001b[49m\u001b[43mnr_vehicles\u001b[49m\u001b[43m=\u001b[49m\u001b[32;43m5000\u001b[39;49m\u001b[43m)\u001b[49m\n",
-      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[6]\u001b[39m\u001b[32m, line 80\u001b[39m, in \u001b[36mNavigation.__init__\u001b[39m\u001b[34m(self, city_name, nr_vehicles, max_nr_of_alternative_routes, session, iteration_id, min_length, max_length, time_step, time_window, dist_thresh, speed_diff_thresh, slow_speed_thresh, alpha, beta, gamma, edges, nodes)\u001b[39m\n\u001b[32m     78\u001b[39m \u001b[38;5;28mprint\u001b[39m(datetime.now())        \n\u001b[32m     79\u001b[39m \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28mself\u001b[39m.generate:\n\u001b[32m---> \u001b[39m\u001b[32m80\u001b[39m     \u001b[38;5;28mself\u001b[39m.vehicles=\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m.\u001b[49m\u001b[43mgenerate_vehicles\u001b[49m\u001b[43m(\u001b[49m\u001b[43miteration\u001b[49m\u001b[43m \u001b[49m\u001b[43m=\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m.\u001b[49m\u001b[43miteration_id\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mmin_length\u001b[49m\u001b[43m \u001b[49m\u001b[43m=\u001b[49m\u001b[43m \u001b[49m\u001b[43mmin_length\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mmax_length\u001b[49m\u001b[43m \u001b[49m\u001b[43m=\u001b[49m\u001b[43m \u001b[49m\u001b[43mmax_length\u001b[49m\u001b[43m)\u001b[49m\n\u001b[32m     81\u001b[39m     \u001b[38;5;28mself\u001b[39m.vehicles_routes=\u001b[38;5;28mself\u001b[39m.generate_vehicle_routes(API_KEY, iteration=\u001b[38;5;28mself\u001b[39m.iteration_id)\n\u001b[32m     82\u001b[39m \u001b[38;5;28;01melse\u001b[39;00m:\n",
-      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[6]\u001b[39m\u001b[32m, line 255\u001b[39m, in \u001b[36mNavigation.generate_vehicles\u001b[39m\u001b[34m(self, iteration, min_length, max_length)\u001b[39m\n\u001b[32m    252\u001b[39m source_point = source_line.interpolate(source_position_on_edge, normalized=\u001b[38;5;28;01mTrue\u001b[39;00m)\n\u001b[32m    254\u001b[39m \u001b[38;5;66;03m# Randomly select a destination edge and point\u001b[39;00m\n\u001b[32m--> \u001b[39m\u001b[32m255\u001b[39m destination_edge = \u001b[43msample_spatially_diverse_edge\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m.\u001b[49m\u001b[43medges\u001b[49m\u001b[43m)\u001b[49m\u001b[38;5;66;03m#self.edges.sample(n=1).iloc[0]\u001b[39;00m\n\u001b[32m    256\u001b[39m destination_position_on_edge = random.random()\n\u001b[32m    257\u001b[39m destination_line = destination_edge[\u001b[33m'\u001b[39m\u001b[33mgeometry\u001b[39m\u001b[33m'\u001b[39m]\n",
-      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[6]\u001b[39m\u001b[32m, line 233\u001b[39m, in \u001b[36mNavigation.generate_vehicles.<locals>.sample_spatially_diverse_edge\u001b[39m\u001b[34m(edges_gdf, n_clusters)\u001b[39m\n\u001b[32m    231\u001b[39m edges_proj = edges_gdf.to_crs(epsg=\u001b[32m3857\u001b[39m)  \u001b[38;5;66;03m# Web Mercator projection in meters\u001b[39;00m\n\u001b[32m    232\u001b[39m centroids = edges_proj.geometry.centroid\n\u001b[32m--> \u001b[39m\u001b[32m233\u001b[39m coords = np.array([[\u001b[43mp\u001b[49m\u001b[43m.\u001b[49m\u001b[43mx\u001b[49m, p.y] \u001b[38;5;28;01mfor\u001b[39;00m p \u001b[38;5;129;01min\u001b[39;00m centroids])\n\u001b[32m    234\u001b[39m kmeans = KMeans(n_clusters=\u001b[38;5;28mmin\u001b[39m(n_clusters, \u001b[38;5;28mlen\u001b[39m(edges_gdf)), n_init=\u001b[33m'\u001b[39m\u001b[33mauto\u001b[39m\u001b[33m'\u001b[39m).fit(coords)\n\u001b[32m    235\u001b[39m edges_gdf[\u001b[33m'\u001b[39m\u001b[33mcluster\u001b[39m\u001b[33m'\u001b[39m] = kmeans.labels_\n",
-      "\u001b[36mFile \u001b[39m\u001b[32mc:\\Users\\rr642bg\\OneDrive - Technicka univerzita v Kosiciach\\Desktop\\qa_mtc\\venv\\Lib\\site-packages\\shapely\\geometry\\point.py:91\u001b[39m, in \u001b[36mPoint.x\u001b[39m\u001b[34m(self)\u001b[39m\n\u001b[32m     88\u001b[39m \u001b[38;5;129m@property\u001b[39m\n\u001b[32m     89\u001b[39m \u001b[38;5;28;01mdef\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34mx\u001b[39m(\u001b[38;5;28mself\u001b[39m):\n\u001b[32m     90\u001b[39m \u001b[38;5;250m    \u001b[39m\u001b[33;03m\"\"\"Return x coordinate.\"\"\"\u001b[39;00m\n\u001b[32m---> \u001b[39m\u001b[32m91\u001b[39m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28mfloat\u001b[39m(\u001b[43mshapely\u001b[49m\u001b[43m.\u001b[49m\u001b[43mget_x\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m)\u001b[49m)\n",
-      "\u001b[36mFile \u001b[39m\u001b[32mc:\\Users\\rr642bg\\OneDrive - Technicka univerzita v Kosiciach\\Desktop\\qa_mtc\\venv\\Lib\\site-packages\\shapely\\decorators.py:87\u001b[39m, in \u001b[36mmultithreading_enabled.<locals>.wrapped\u001b[39m\u001b[34m(*args, **kwargs)\u001b[39m\n\u001b[32m     85\u001b[39m     \u001b[38;5;28;01mfor\u001b[39;00m arr \u001b[38;5;129;01min\u001b[39;00m array_args:\n\u001b[32m     86\u001b[39m         arr.flags.writeable = \u001b[38;5;28;01mFalse\u001b[39;00m\n\u001b[32m---> \u001b[39m\u001b[32m87\u001b[39m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43mfunc\u001b[49m\u001b[43m(\u001b[49m\u001b[43m*\u001b[49m\u001b[43margs\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43m*\u001b[49m\u001b[43m*\u001b[49m\u001b[43mkwargs\u001b[49m\u001b[43m)\u001b[49m\n\u001b[32m     88\u001b[39m \u001b[38;5;28;01mfinally\u001b[39;00m:\n\u001b[32m     89\u001b[39m     \u001b[38;5;28;01mfor\u001b[39;00m arr, old_flag \u001b[38;5;129;01min\u001b[39;00m \u001b[38;5;28mzip\u001b[39m(array_args, old_flags):\n",
-      "\u001b[36mFile \u001b[39m\u001b[32mc:\\Users\\rr642bg\\OneDrive - Technicka univerzita v Kosiciach\\Desktop\\qa_mtc\\venv\\Lib\\site-packages\\shapely\\_geometry.py:298\u001b[39m, in \u001b[36mget_x\u001b[39m\u001b[34m(point, **kwargs)\u001b[39m\n\u001b[32m    273\u001b[39m \u001b[38;5;129m@multithreading_enabled\u001b[39m\n\u001b[32m    274\u001b[39m \u001b[38;5;28;01mdef\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34mget_x\u001b[39m(point, **kwargs):\n\u001b[32m    275\u001b[39m \u001b[38;5;250m    \u001b[39m\u001b[33;03m\"\"\"Return the x-coordinate of a point.\u001b[39;00m\n\u001b[32m    276\u001b[39m \n\u001b[32m    277\u001b[39m \u001b[33;03m    Parameters\u001b[39;00m\n\u001b[32m   (...)\u001b[39m\u001b[32m    296\u001b[39m \n\u001b[32m    297\u001b[39m \u001b[33;03m    \"\"\"\u001b[39;00m\n\u001b[32m--> \u001b[39m\u001b[32m298\u001b[39m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43mlib\u001b[49m\u001b[43m.\u001b[49m\u001b[43mget_x\u001b[49m\u001b[43m(\u001b[49m\u001b[43mpoint\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43m*\u001b[49m\u001b[43m*\u001b[49m\u001b[43mkwargs\u001b[49m\u001b[43m)\u001b[49m\n",
-      "\u001b[31mKeyboardInterrupt\u001b[39m: "
+      "2025-06-02 12:35:18.564852\n",
+      " Run configuration saved (run_id=1).\n",
+      "Iteration created (iteration_id=1) for run_config_id=1.\n",
+      "2025-06-02 12:35:19.892317\n"
      ]
     }
    ],
    "source": [
-    "case1=Navigation(CITY_NAME,nr_vehicles=5000)\n",
+    "case1=Navigation(CITY_NAME,nr_vehicles=10000)\n",
     "\n",
     "\n"
    ]
@@ -1010,18 +969,6 @@
    "metadata": {},
    "source": [
     "### Next steps:\n",
-    "\n",
-    "0. handle error\n",
-    "```\n",
-    "Starting async route fetching...\n",
-    "2025-06-02 12:35:30.200064\n",
-    "Error: 400 - {\"error_code\":442,\"error\":\"No path could be found for input\",\"status_code\":400,\"status\":\"Bad Request\"}\n",
-    "Error: 400 - {\"error_code\":442,\"error\":\"No path could be found for input\",\"status_code\":400,\"status\":\"Bad Request\"}\n",
-    "Error: 400 - {\"error_code\":442,\"error\":\"No path could be found for input\",\"status_code\":400,\"status\":\"Bad Request\"}\n",
-    "2025-06-02 12:36:43.213135\n",
-    "```\n",
-    "\n",
-    "++ preco mi to generuje vsetky auta na jednej kope - vyriesila som to KMeans, ale pomale to je\n",
     "\n",
     "1. select only 0.9 percentile of the vehicles that cause congestion\n",
     "```\n",

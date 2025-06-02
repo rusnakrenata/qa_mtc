@@ -163,6 +163,56 @@ class CongestionMap(Base):
     congestion_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+
+# indexes
+
+# CREATE INDEX idx_run_configs_id ON vehicle_routes(run_configs_id);
+
+
+
+# CREATE INDEX idx_vr_config_vehicle_duration
+# ON trafficOptimization.vehicle_routes (
+#   run_configs_id,
+#   iteration_id,
+#   vehicle_id,
+#   duration
+# );
+
+# CREATE INDEX idx_vr_config_vehicle_distance
+# ON trafficOptimization.vehicle_routes (
+#   run_configs_id,
+#   iteration_id,
+#   vehicle_id,
+#   distance
+# );
+
+
+# CREATE INDEX idx_route_points_join_filter
+# ON trafficOptimization.route_points (
+#     iteration_id,
+#     run_configs_id,
+#     time,
+#     edge_id,
+#     cardinal,
+#     vehicle_id
+# );
+
+
+
+# CREATE INDEX idx_route_points_cover
+# ON trafficOptimization.route_points (
+#     iteration_id,
+#     run_configs_id,
+#     time,
+#     edge_id,
+#     cardinal,
+#     vehicle_id,
+#     route_id,
+#     lat,
+#     lon,
+#     speed
+# );
+
     
 # class CongestionScore(Base):
 #     __tablename__ = 'congestion_scores'
@@ -208,4 +258,4 @@ class CongestionMap(Base):
 
 ####### --TABLES-- #######
 
-#Base.metadata.create_all(engine)
+Base.metadata.create_all(engine)
