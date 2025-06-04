@@ -47,6 +47,7 @@ def generate_vehicle_routes(
 
     print("Starting async route fetching...")
     print(datetime.now())
+    route_points_records = []
 
     async def fetch_all_routes(vehicles):
         import aiohttp
@@ -92,6 +93,7 @@ def generate_vehicle_routes(
             point_id = 0
             steps = convert_valhalla_leg_to_google_like_steps(route['leg'])
             points = get_points_in_time_window(steps)
+            
 
             for point in points:
                 point_id += 1
@@ -121,8 +123,22 @@ def generate_vehicle_routes(
                 )
                 session.add(route_point)
 
+                route_points_records.append({
+                    "vehicle_id": vehicle_route.vehicle_id,
+                    "route_id": vehicle_route.route_id,
+                    "point_id": point_id,
+                    "edge_id": edge_id,
+                    "cardinal": cardinal,
+                    "speed": speed,
+                    "lat": lat,
+                    "lon": lon,
+                    "time": time_val
+                })
+
             routes.append(vehicle_route)
 
     session.commit()
     print(datetime.now())
-    return routes
+    routes_df = pd.DataFrame(route_points_records)
+    #print(routes_df)
+    return routes_df #, routes

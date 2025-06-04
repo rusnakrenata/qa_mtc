@@ -146,13 +146,17 @@ def normalize_valhalla_route(route, route_index=0):
     }
 
 async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of_alternative_routes):
+
+
     base_url = "http://77.93.155.81:8002/route"
     payload = {
         "locations": [{"lat": origin[1], "lon": origin[0]}, {"lat": destination[1], "lon": destination[0]}],
         "costing": "auto",
+        #"costing_options":{"auto":{"country_crossing_penalty":2000.0}},
         "alternates": max_nr_of_alternative_routes > 1,
         "number_of_alternates": max_nr_of_alternative_routes - 1 if max_nr_of_alternative_routes > 1 else 0
     }
+    
 
     async with session.post(base_url, json=payload) as response:
         if response.status == 200:

@@ -20,10 +20,10 @@ def store_city_to_db(session, city_name, nodes, edges, City, Node, Edge):
             'osmid': node.get('osmid'),
             'x': node['x'] if not pd.isna(node['x']) else None,
             'y': node['y'] if not pd.isna(node['y']) else None,
-            'street_count': node.get('street_count'),
-            'highway': node.get('highway'),
-            'railway': node.get('railway'),
-            'junction': node.get('junction'),
+            #'street_count': node.get('street_count'),
+            #'highway': node.get('highway'),
+            #'railway': node.get('railway'),
+            #'junction': node.get('junction'),
             'geometry': str(node['geometry']) if node['geometry'] is not None else None
         }
         session.add(Node(**node_data))

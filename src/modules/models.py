@@ -57,10 +57,10 @@ class Node(Base):
     osmid = Column(String(255))
     x = Column(Numeric(9,6))
     y = Column(Numeric(9,6))
-    street_count = Column(Integer, nullable=True)
-    highway = Column(String(255), nullable=True)
-    railway = Column(String(255), nullable=True)
-    junction = Column(String(255), nullable=True)    
+    #street_count = Column(Integer, nullable=True)
+    #highway = Column(String(255), nullable=True)
+    #railway = Column(String(255), nullable=True)
+    #junction = Column(String(255), nullable=True)    
     geometry = Column(String(255), nullable=True)  # Store as WKT or GeoJSON
     created_at = Column(DateTime, default= datetime.utcnow)
 
