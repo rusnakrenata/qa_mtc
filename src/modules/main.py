@@ -21,12 +21,12 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Bratislava, Slovakia"
-N_VEHICLES = 100
+N_VEHICLES = 5000
 K_ALTERNATIVES = 3
-MIN_LENGTH = 0
-MAX_LENGTH = 10000
+MIN_LENGTH = 200
+MAX_LENGTH = 5000
 TIME_STEP = 10
-TIME_WINDOW = 600
+TIME_WINDOW = 1000
 DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
@@ -92,8 +92,16 @@ def main():
     #print(weights_normalized)
 
     # Step 10: QUBO
-    Q = qubo_matrix(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, lambda_strategy="normalized", fixed_lambda=1.5)
-    print(Q)
+    Q = qubo_matrix(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, lambda_strategy="normalized", fixed_lambda=1.0)
+    #print(Q)
+
+    # Step 11
+    #QA testing qa_testing.py(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, run_config.id, iteration_id, session, lambda_strategy="normalized", fixed_lambda=1.0, comp_type='hybrid', num_reads=10):
+    # post_qa_congestion.py(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
+    # qa_congestion_df = generate_post_qa_congestion_df_from_db(session, run_config.id, iteration_id)
+    # plot_congestion_heatmap(edges_gdf, qa_congestion_df)
+
+
 
 
 if __name__ == "__main__":
