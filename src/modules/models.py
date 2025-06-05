@@ -162,6 +162,27 @@ class CongestionMap(Base):
     edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False)
     congestion_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QAResult(Base):
+    __tablename__ = 'qa_results'
+
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    lambda_strategy = Column(String(50))
+    lambda_value = Column(Float)
+    comp_type = Column(String(50))
+    num_reads = Column(Integer)
+    n_vehicles = Column(Integer)
+    k_alternattives = Column(Integer)  # follows your return dict spelling
+    weights = Column(JSON)             # serialized congestion weight matrix
+    vehicle_ids = Column(JSON)         # list of filtered vehicle IDs
+    assignment_valid = Column(Integer) # 1 or 0
+    assignment = Column(JSON)          # route assignments for each vehicle
+    energy = Column(Float)
+    duration = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
 
 # indexes

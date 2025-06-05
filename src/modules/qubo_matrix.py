@@ -3,7 +3,7 @@ from itertools import combinations
 from normalize_congestion_weights import normalize_congestion_weights
 from congestion_weights import congestion_weights
 
-def qubo_matrix(n, t, w_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.5):
+def qubo_matrix(n, t, w_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.0):
     """
     Constructs the QUBO dictionary for the traffic assignment problem.
 
