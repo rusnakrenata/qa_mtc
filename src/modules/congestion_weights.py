@@ -1,10 +1,10 @@
 def congestion_weights(weights_df, n, t, vehicle_ids):
     """
-    Converts a DataFrame of congestion weights into a raw (non-normalized) 3D matrix w[i][j][k].
-    Includes diagnostic information: min/max values and number of non-zero weights.
+    Converts a DataFrame of congestion weights into a 4D matrix w[i][j][k1][k2].
+    Used when lambda_strategy = 'max_weight'.
     """
     vehicle_ids_index = {vid: idx for idx, vid in enumerate(vehicle_ids)}
-    w = [[[0.0 for _ in range(t)] for _ in range(n)] for _ in range(n)]
+    w = [[[[0.0 for _ in range(t)] for _ in range(t)] for _ in range(n)] for _ in range(n)]
     values = []
 
     for _, row in weights_df.iterrows():
@@ -13,27 +13,22 @@ def congestion_weights(weights_df, n, t, vehicle_ids):
         k1 = int(row['vehicle_1_route']) - 1
         k2 = int(row['vehicle_2_route']) - 1
 
-        if i is None or j is None or k1 != k2:
+        if i is None or j is None or not (0 <= k1 < t) or not (0 <= k2 < t):
             continue
 
-        k = k1
         score = row['weighted_congestion_score']
         values.append(score)
-        w[i][j][k] = score
-        w[j][i][k] = score  # symmetry
+        w[i][j][k1][k2] = score
+        w[j][i][k2][k1] = score  # symmetry
 
-    if values:
-        min_w = min(values)
-        max_w = max(values)
-    else:
-        min_w = max_w = 0.0
-
+    min_w = min(values) if values else 0.0
+    max_w = max(values) if values else 0.0
     nonzero_count = sum(
-        1 for i in range(n) for j in range(n) for k in range(t)
-        if w[i][j][k] > 0
+        1 for i in range(n) for j in range(n) for k1 in range(t) for k2 in range(t)
+        if w[i][j][k1][k2] > 0
     )
 
-    print(f"|i| = {n}, |j| = {n}, |k| = {t}")
+    print(f"|i| = {n}, |j| = {n}, |k1| = {t}, |k2| = {t}")
     print(f"min_w = {min_w:.6f}, max_w = {max_w:.6f}, non-zero weights = {nonzero_count}")
 
     return w, max_w
