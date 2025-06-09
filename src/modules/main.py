@@ -1,4 +1,6 @@
 # ---------- IMPORT MODULES ----------
+import pandas as pd
+import numpy as np
 from get_city_graph import get_city_graph
 from get_city_data_from_db import get_city_data_from_db
 from store_city_to_db import store_city_to_db
@@ -21,7 +23,7 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Bratislava, Slovakia"
-N_VEHICLES = 10000
+N_VEHICLES = 1000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 5000
@@ -78,7 +80,7 @@ def main():
     plot_congestion_heatmap(edges, congestion_df)
 
     # Step 8: Filter routes for QUBO
-    filtered_vehicles = filter_routes_for_qubo(routes_df, congestion_df, threshold=0.9)
+    filtered_vehicles = filter_routes_for_qubo(routes_df, congestion_df, threshold_percentile=0.9)
     #print(filtered_vehicles)
     N_FILTERED = len(filtered_vehicles)
     print("Number of elements:", N_FILTERED)
@@ -86,13 +88,15 @@ def main():
     # Step 9: Compute wights from congestion
     weights_df = get_congestion_weights(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
     print(weights_df)
+    
 
     #weights_normalized = normalize_congestion_weights(weights_df, N_FILTERED, K_ALTERNATIVES, filtered_vehicles)
     #weights_wo_normalization, max_weight = congestion_weights(weights_df, N_FILTERED, K_ALTERNATIVES, filtered_vehicles)
     #print(weights_normalized)
 
     # Step 10: QUBO
-    Q = qubo_matrix(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, lambda_strategy="normalized", fixed_lambda=1.0)
+    Q, weights, _ = qubo_matrix(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, lambda_strategy="normalized", fixed_lambda=1.0)
+ 
     #print(Q)
 
     # Step 11
@@ -102,6 +106,20 @@ def main():
     # plot_congestion_heatmap(edges_gdf, qa_congestion_df)
 
 
+
+    def qubo_dict_to_dataframe(Q, size):
+        matrix = np.zeros((size, size))
+        for (i, j), v in Q.items():
+            matrix[i][j] = v
+            if i != j:
+                matrix[j][i] = v  # ensure symmetry for display
+        return pd.DataFrame(matrix)
+
+    # Store Q to csv
+    size = N_FILTERED * K_ALTERNATIVES
+    Q_df = qubo_dict_to_dataframe(Q, size)
+    #print(Q_df.round(3))
+    Q_df.to_csv("qubo_matrix.csv", index=False)
 
 
 if __name__ == "__main__":

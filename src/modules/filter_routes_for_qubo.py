@@ -12,19 +12,29 @@
 #     return filtered_vehicles
 
 
-def filter_routes_for_qubo(routes_df, congestion_df, top_percent=0.1):
+def filter_routes_for_qubo(routes_df, congestion_df, threshold_percentile=0.9):
+    """
+    Filters vehicles that contribute significantly to congestion based on a percentile threshold.
+
+    Parameters:
+        routes_df: DataFrame with route points
+        congestion_df: DataFrame with congestion scores (edge_id, congestion_score)
+        threshold_percentile: percentile above which vehicles are considered congesting (e.g., 0.9)
+
+    Returns:
+        List of filtered vehicle_ids
+    """
     # Merge congestion scores onto route points
     merged = routes_df.merge(congestion_df, on='edge_id', how='left')
     merged['congestion_score'] = merged['congestion_score'].fillna(0)
 
-    # Compute total congestion per vehicle
+    # Compute total congestion exposure per vehicle
     vehicle_scores = merged.groupby('vehicle_id')['congestion_score'].sum().reset_index()
-    
-    # Select top X%
-    top_pct = int(len(vehicle_scores) * top_percent)
-    top_vehicles = vehicle_scores.sort_values(by='congestion_score', ascending=False).head(top_pct)
 
-    filtered_vehicles = []
-    filtered_vehicles = top_vehicles['vehicle_id'].tolist()
+    # Compute threshold value using percentile
+    threshold_value = vehicle_scores['congestion_score'].quantile(threshold_percentile)
+
+    # Select all vehicles whose congestion exceeds or equals the threshold
+    filtered_vehicles = vehicle_scores[vehicle_scores['congestion_score'] >= threshold_value]['vehicle_id'].tolist()
 
     return filtered_vehicles

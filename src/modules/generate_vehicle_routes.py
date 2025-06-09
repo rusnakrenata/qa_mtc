@@ -81,7 +81,7 @@ def generate_vehicle_routes(
 
 
 
-    print("Valhalla routes egenrated")
+    print("Valhalla routes generated.")
     print(datetime.now())
 
     routes = []
