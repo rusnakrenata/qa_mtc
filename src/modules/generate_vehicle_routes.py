@@ -1,6 +1,8 @@
 import asyncio
+import aiohttp
 import nest_asyncio
 import pandas as pd
+from asyncio import Semaphore
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 from shapely.geometry.base import BaseGeometry
@@ -49,18 +51,37 @@ def generate_vehicle_routes(
     print(datetime.now())
     route_points_records = []
 
-    async def fetch_all_routes(vehicles):
-        import aiohttp
-        async with aiohttp.ClientSession() as http_session:
-            tasks = []
-            for _, vehicle in vehicles.iterrows():
-                origin = (vehicle['origin_geometry'].x, vehicle['origin_geometry'].y)
-                destination = (vehicle['destination_geometry'].x, vehicle['destination_geometry'].y)
-                tasks.append(async_get_routes_from_valhalla(http_session, origin, destination, max_nr_of_alternative_routes))
+    # async def fetch_all_routes(vehicles):
+    #     async with aiohttp.ClientSession() as http_session:
+    #         tasks = []
+    #         for _, vehicle in vehicles.iterrows():
+    #             origin = (vehicle['origin_geometry'].x, vehicle['origin_geometry'].y)
+    #             destination = (vehicle['destination_geometry'].x, vehicle['destination_geometry'].y)
+    #             tasks.append(async_get_routes_from_valhalla(http_session, origin, destination, max_nr_of_alternative_routes))
+    #         return await asyncio.gather(*tasks)
+
+    # loop = asyncio.get_event_loop()
+    # routes_data_list = loop.run_until_complete(fetch_all_routes(vehicles))
+
+    async def batched_valhalla_fetch(vehicles, max_concurrent=20):
+        semaphore = Semaphore(max_concurrent)
+        async with aiohttp.ClientSession() as session:
+            async def fetch(vehicle):
+                async with semaphore:
+                    origin = (vehicle['origin_geometry'].x, vehicle['origin_geometry'].y)
+                    dest = (vehicle['destination_geometry'].x, vehicle['destination_geometry'].y)
+                    return await async_get_routes_from_valhalla(session, origin, dest, max_nr_of_alternative_routes)
+
+            tasks = [fetch(vehicle) for _, vehicle in vehicles.iterrows()]
             return await asyncio.gather(*tasks)
 
+    # Usage
     loop = asyncio.get_event_loop()
-    routes_data_list = loop.run_until_complete(fetch_all_routes(vehicles))
+    routes_data_list = loop.run_until_complete(batched_valhalla_fetch(vehicles, max_concurrent=20))
+
+
+
+    print("Valhalla routes egenrated")
     print(datetime.now())
 
     routes = []
