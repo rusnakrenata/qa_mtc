@@ -28,6 +28,8 @@ def qubo_matrix(n, t, w_df, vehicle_ids, lambda_strategy="normalized", fixed_lam
         lambda_penalty = max_w
         print(f"Using lambda_penalty = max_w = {lambda_penalty:.6f}")
 
+    w_c, max_w_c = congestion_weights(w_df, n, t, vehicle_ids)
+
     # Step 2: Congestion cost terms (based on partial route overlaps)
     for i in range(n):
         for j in range(i + 1, n):  # only i < j to avoid duplicates
@@ -49,4 +51,4 @@ def qubo_matrix(n, t, w_df, vehicle_ids, lambda_strategy="normalized", fixed_lam
                 q2 = i * t + k2
                 Q[(q1, q2)] += 2 * lambda_penalty
 
-    return dict(Q)
+    return dict(Q), w, w_c
