@@ -22,10 +22,10 @@ from sqlalchemy.orm import sessionmaker
 from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRoute, CongestionMap, RoutePoint  # adjust to your actual model imports
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
-CITY_NAME = "Bratislava, Slovakia"
-N_VEHICLES = 1000
+CITY_NAME = "Most pri Bratislave, Slovakia"
+N_VEHICLES = 5
 K_ALTERNATIVES = 3
-MIN_LENGTH = 200
+MIN_LENGTH = 0
 MAX_LENGTH = 5000
 TIME_STEP = 10
 TIME_WINDOW = 1000
