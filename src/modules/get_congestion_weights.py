@@ -47,7 +47,7 @@ def get_congestion_weights(session, run_configs_id, iteration_id,
                     POW(SIN(RADIANS(b.lat - a.lat) / 2), 2) +
                     COS(RADIANS(a.lat)) * COS(RADIANS(b.lat)) *
                     POW(SIN(RADIANS(b.lon - a.lon) / 2), 2)
-                )) AS distance,
+                ))*1000 AS distance,
                 ABS(a.speed - b.speed) AS speed_diff
             FROM trafficOptimization.route_points a
             JOIN trafficOptimization.route_points b

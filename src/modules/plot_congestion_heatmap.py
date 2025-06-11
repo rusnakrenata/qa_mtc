@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import folium
-import branca.colormap 
-from branca.colormap import LinearColormap
+import branca.colormap as cm
+from branca.colormap import LinearColormap, linear
 from shapely.geometry import LineString
 import geopandas as gpd
 
@@ -33,7 +33,7 @@ def plot_congestion_heatmap_interactive(edges_gdf, congestion_df, offset_deg=0.0
     vmax = merged['congestion_score'].max()
 
     colormap = LinearColormap(
-        ['white', 'yellow','red','purple'], 
+        ['silver', 'yellow','red','purple'], 
         vmin=vmin,
         vmax=vmax,
         caption='Congestion Score (Green → Red)'
