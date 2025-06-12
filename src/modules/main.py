@@ -9,12 +9,13 @@ from create_iteration import create_iteration
 from generate_vehicles import generate_vehicles
 from generate_vehicle_routes import generate_vehicle_routes
 from generate_congestion import generate_congestion
-from plot_congestion_heatmap import plot_congestion_heatmap
+from plot_congestion_heatmap import plot_congestion_heatmap, plot_congestion_heatmap_interactive
 from filter_routes_for_qubo import filter_routes_for_qubo
 from get_congestion_weights import get_congestion_weights
 from normalize_congestion_weights import normalize_congestion_weights
 from congestion_weights import congestion_weights
 from qubo_matrix import qubo_matrix
+from compute_shortest_routes import compute_shortest_routes
 
 
 # ---------- CONFIGURATION ----------
@@ -22,13 +23,13 @@ from sqlalchemy.orm import sessionmaker
 from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRoute, CongestionMap, RoutePoint  # adjust to your actual model imports
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
-CITY_NAME = "Most pri Bratislave, Slovakia"
-N_VEHICLES = 5
+CITY_NAME = "Bratislava, Slovakia"
+N_VEHICLES = 25000
 K_ALTERNATIVES = 3
-MIN_LENGTH = 0
-MAX_LENGTH = 5000
+MIN_LENGTH = 200
+MAX_LENGTH = 10000
 TIME_STEP = 10
-TIME_WINDOW = 1000
+TIME_WINDOW = 1200
 DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
@@ -101,8 +102,8 @@ def main():
 
     # Step 11
     #QA testing qa_testing.py(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, run_config.id, iteration_id, session, lambda_strategy="normalized", fixed_lambda=1.0, comp_type='hybrid', num_reads=10):
-    # post_qa_congestion.py(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
-    # qa_congestion_df = generate_post_qa_congestion_df_from_db(session, run_config.id, iteration_id)
+    # post_qa_congestion.py(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0) -- need to check the vehicle_ids matching back to original
+    # qa_congestion_df = post_qa_congestion(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
     # plot_congestion_heatmap(edges_gdf, qa_congestion_df)
 
 
@@ -119,7 +120,20 @@ def main():
     size = N_FILTERED * K_ALTERNATIVES
     Q_df = qubo_dict_to_dataframe(Q, size)
     #print(Q_df.round(3))
-    Q_df.to_csv("qubo_matrix.csv", index=False)
+    Q_df.to_csv("files/qubo_matrix.csv", index=False)
+
+    
+
+    shortes_routes_dur_df = compute_shortest_routes(session, run_config, iteration_id, method="duration")
+    plot_map_dur = plot_congestion_heatmap_interactive(edges, shortes_routes_dur_df,offset_deg=0.000025)
+    plot_map_dur
+    plot_map_dur.save("files/shortest_routes_dur_congestion_heatmap.html")
+
+
+    shortes_routes_dis_df = compute_shortest_routes(session, run_config, iteration_id, method="distance")
+    plot_map_dis = plot_congestion_heatmap_interactive(edges, shortes_routes_dis_df,offset_deg=0.000025)
+    plot_map_dis
+    plot_map_dis.save("files/shortest_routes_dis_congestion_heatmap.html")
 
 
 if __name__ == "__main__":

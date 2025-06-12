@@ -182,6 +182,7 @@ class QAResult(Base):
     assignment = Column(JSON)          # route assignments for each vehicle
     energy = Column(Float)
     duration = Column(Float)
+    qubo_path = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     
 
