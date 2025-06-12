@@ -1,0 +1,3 @@
+vehicle_1,vehicle_2,vehicle_1_route,vehicle_2_route,weighted_congestion_score
+1,4,1,1,0.12405005522734094
+1,4,2,1,0.06786397531438894

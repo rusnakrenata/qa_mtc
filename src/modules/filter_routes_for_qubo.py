@@ -30,11 +30,14 @@ def filter_routes_for_qubo(routes_df, congestion_df, threshold_percentile=0.9):
 
     # Compute total congestion exposure per vehicle
     vehicle_scores = merged.groupby('vehicle_id')['congestion_score'].sum().reset_index()
+    print("Vehicle scores:" , vehicle_scores)
 
     # Compute threshold value using percentile
     threshold_value = vehicle_scores['congestion_score'].quantile(threshold_percentile)
+    print("Threshold value:" , threshold_value)
 
     # Select all vehicles whose congestion exceeds or equals the threshold
     filtered_vehicles = vehicle_scores[vehicle_scores['congestion_score'] >= threshold_value]['vehicle_id'].tolist()
+    print("Filtered vehicles:" , filtered_vehicles)
 
     return filtered_vehicles

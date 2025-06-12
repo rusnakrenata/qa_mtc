@@ -4,6 +4,8 @@ def normalize_congestion_weights(weights_df, n, t, vehicle_ids):
     Normalization is done over all weights into the [0, 1] range.
     """
     vehicle_ids_index = {vid: idx for idx, vid in enumerate(vehicle_ids)}
+    print("Vehicle ids:" , vehicle_ids)
+    print("Vehicle ids index:" , vehicle_ids_index)
     w = [[[[0.0 for _ in range(t)] for _ in range(t)] for _ in range(n)] for _ in range(n)]
     values = []
 
@@ -17,6 +19,7 @@ def normalize_congestion_weights(weights_df, n, t, vehicle_ids):
             continue
 
         score = row['weighted_congestion_score']
+        #print("i,j,k1,k2,score: ", i,j,k1,k2, score)
         values.append(score)
         w[i][j][k1][k2] = score
         w[j][i][k2][k1] = score  # symmetric

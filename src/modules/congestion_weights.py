@@ -17,6 +17,7 @@ def congestion_weights(weights_df, n, t, vehicle_ids):
             continue
 
         score = row['weighted_congestion_score']
+        #print("i,j,k1,k2: ", i,j,k1,k2)
         values.append(score)
         w[i][j][k1][k2] = score
         w[j][i][k2][k1] = score  # symmetry

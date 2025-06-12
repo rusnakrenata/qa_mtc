@@ -30,40 +30,47 @@ def qa_testing(n, t, weights_df, vehicle_ids, run_config_id, iteration_id, sessi
     duration_qa = 0.0
 
     # Generate QUBO
-    Q = qubo_matrix(n, t, weights_df, vehicle_ids, lambda_strategy, fixed_lambda)
+    Q, weights, _ = qubo_matrix(n, t, weights_df, vehicle_ids, lambda_strategy, fixed_lambda)
+
+    for (i, j), val in Q.items():
+        if not np.isfinite(val):
+            raise ValueError(f"Invalid QUBO value at ({i}, {j}): {val}")
 
     # Create BinaryQuadraticModel
     bqm = BinaryQuadraticModel.from_qubo(Q)
 
     # Run sampler
-    if comp_type == 'test':
-        sampler = SimulatedAnnealingSampler()
-        response = sampler.sample(bqm, num_reads=num_reads)
+    start_time = time.perf_counter()
 
+    if comp_type == 'sa':
+        sampler = SimulatedAnnealingSampler()
+        response = sampler.sample(bqm, num_reads=num_reads, seed = 42)
     elif comp_type == 'hybrid':
-        start_time = time.time()
         sampler = LeapHybridSampler()
         response = sampler.sample(bqm)
-        duration_qa = time.time() - start_time
-
     elif comp_type == 'qpu':
         sampler = EmbeddingComposite(DWaveSampler())
         response = sampler.sample(bqm, num_reads=num_reads)
 
-    # Evaluate best sample
+    duration_qa = time.perf_counter() - start_time
+
+    # Evaluate best sample (first means the one with lowest energy - it is already sorted in the API)
     best_sample = response.first.sample
     energy = response.first.energy
 
-    # Extract assignment
-    x = [best_sample[i * t + k] for i in range(n) for k in range(t)]
-    assignment = np.argmax(np.array(x).reshape((n, t)), axis=1)
-
-    # Evaluate constraint satisfaction
+    # Check validity (only one route per vehicle is selected)
     assignment_valid = all(
-        sum(best_sample[i * t + k] for k in range(t)) == 1 for i in range(n)
+        sum(best_sample[i * t + k] for k in range(t)) == 1
+        for i in range(n)
     )
 
-    
+    #  Only construct the assignment if valid
+    if assignment_valid:
+        x = [best_sample[i * t + k] for i in range(n) for k in range(t)]
+        assignment = np.argmax(np.array(x).reshape((n, t)), axis=1)
+    else:
+        assignment = [-1] * n  # or None, or raise warning  
+        print('Constraint not satisfied!!')  
 
 
     # Store the matrix to filesystem
@@ -100,6 +107,7 @@ def qa_testing(n, t, weights_df, vehicle_ids, run_config_id, iteration_id, sessi
         assignment=assignment.tolist(),
         energy=energy,
         duration=duration_qa,
+        qubo_path = filepath,
         created_at=datetime.utcnow()
     )
 
@@ -120,5 +128,6 @@ def qa_testing(n, t, weights_df, vehicle_ids, run_config_id, iteration_id, sessi
         'assignment_valid': assignment_valid,
         'assignment': assignment,
         'energy': energy,
+        'qubo_path': filepath,
         'duration': duration_qa
     }
