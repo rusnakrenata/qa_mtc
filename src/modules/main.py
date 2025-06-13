@@ -24,7 +24,7 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Bratislava, Slovakia"
-N_VEHICLES = 25000
+N_VEHICLES = 250
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 10000
@@ -120,17 +120,17 @@ def main():
     size = N_FILTERED * K_ALTERNATIVES
     Q_df = qubo_dict_to_dataframe(Q, size)
     #print(Q_df.round(3))
-    Q_df.to_csv("files/qubo_matrix.csv", index=False)
+    Q_df.to_csv("files/qubo_matrix_1.csv", index=False)
 
     
 
-    shortes_routes_dur_df = compute_shortest_routes(session, run_config, iteration_id, method="duration")
+    shortes_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
     plot_map_dur = plot_congestion_heatmap_interactive(edges, shortes_routes_dur_df,offset_deg=0.000025)
     plot_map_dur
     plot_map_dur.save("files/shortest_routes_dur_congestion_heatmap.html")
 
 
-    shortes_routes_dis_df = compute_shortest_routes(session, run_config, iteration_id, method="distance")
+    shortes_routes_dis_df = compute_shortest_routes(session, run_config.id, iteration_id, method="distance")
     plot_map_dis = plot_congestion_heatmap_interactive(edges, shortes_routes_dis_df,offset_deg=0.000025)
     plot_map_dis
     plot_map_dis.save("files/shortest_routes_dis_congestion_heatmap.html")

@@ -113,7 +113,11 @@ def generate_vehicle_routes(
 
             point_id = 0
             steps = convert_valhalla_leg_to_google_like_steps(route['leg'])
+            #print("convert_valhalla_leg_to_google_like_steps done.")
+            #print(datetime.now())
             points = get_points_in_time_window(steps)
+            #print("get_points_in_time_window done.")
+            #print(datetime.now())
             
 
             for point in points:
@@ -125,9 +129,15 @@ def generate_vehicle_routes(
 
                 previous_location = points[point_id - 2]['location'] if point_id > 1 else Point(origin[0], origin[1])
                 edge = find_closest_osm_edge(lon, lat, edges_proj, edge_tree, transformer=transformer)
+                #print("find_closest_osm_edge done.")
+                #print(datetime.now())
                 edge_id = edge['id']
                 bearing = calculate_initial_bearing(previous_location.y, previous_location.x, lat, lon)
+                #print("calculate_initial_bearing done.")
+                #print(datetime.now())
                 cardinal = bearing_to_cardinal(bearing)
+                #print("bearing_to_cardinal done.")
+                #print(datetime.now())
 
                 route_point = RoutePoint(
                     vehicle_id=vehicle_route.vehicle_id,
@@ -159,6 +169,7 @@ def generate_vehicle_routes(
             routes.append(vehicle_route)
 
     session.commit()
+    print("Routes stored in DB done.")
     print(datetime.now())
     routes_df = pd.DataFrame(route_points_records)
     #print(routes_df)
