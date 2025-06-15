@@ -1,7 +1,7 @@
 import pandas as pd
 from sqlalchemy import text as sa_text
 
-def post_qa_congestion(session, run_config_id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0):
+def post_qa_congestion(session, run_config_id, iteration_id):
     """
     Recomputes congestion based on the QA-selected vehicle-route assignments stored in the `qa_results` table.
     
@@ -54,39 +54,23 @@ def post_qa_congestion(session, run_config_id, iteration_id, dist_thresh=10.0, s
 
     # Step 5: Recompute congestion from route_points matching the QA assignment
     result = session.execute(sa_text("""
-        SELECT
-            a.edge_id,
-            SUM(CASE 
-                WHEN distance < :dist_thresh AND speed_diff < :speed_diff_thresh THEN 
-                    (1 / ((1 + distance) * (1 + speed_diff)))
-                ELSE 0
-            END) AS congestion_score
-        FROM (
-            SELECT
-                a.edge_id,
-                6371 * 2 * ASIN(SQRT(
-                    POW(SIN(RADIANS(b.lat - a.lat) / 2), 2) +
-                    COS(RADIANS(a.lat)) * COS(RADIANS(b.lat)) *
-                    POW(SIN(RADIANS(b.lon - a.lon) / 2), 2)
-                )) AS distance,
-                ABS(a.speed - b.speed) AS speed_diff
-            FROM route_points a
-            JOIN route_points b
-                ON a.time = b.time
-                AND a.edge_id = b.edge_id
-                AND a.cardinal = b.cardinal
-                AND a.vehicle_id < b.vehicle_id
-            JOIN temp_selected_routes ta ON a.vehicle_id = ta.vehicle_id AND a.route_id = ta.route_id
-            JOIN temp_selected_routes tb ON b.vehicle_id = tb.vehicle_id AND b.route_id = tb.route_id
-            WHERE a.run_configs_id = :run_config_id
-              AND b.run_configs_id = :run_config_id
-              AND a.iteration_id = :iteration_id
-              AND b.iteration_id = :iteration_id
-        ) AS pairwise
-        GROUP BY edge_id
+        SELECT edge_id, sum(congestion_score) as congestion_score
+        FROM 
+        (
+        SELECT distinct edge_id, vehicle1 as vehicle, congestion_score
+        FROM congestion_map cm 
+        INNER JOIN temp_selected_routes sr
+        ON CONCAT(cm.vehicle1,vehicle1_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
+        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+        UNION ALL
+        SELECT distinct edge_id, vehicle2 as vehicle, congestion_score
+        FROM congestion_map cm 
+        INNER JOIN temp_selected_routes sr
+        ON CONCAT(cm.vehicle2,vehicle2_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
+        WHERE run_configs_id = :un_config_id AND iteration_id = :iteration_id
+        ) a
+        group by edge_id
     """), {
-        'dist_thresh': dist_thresh,
-        'speed_diff_thresh': speed_diff_thresh,
         'run_config_id': run_config_id,
         'iteration_id': iteration_id
     })

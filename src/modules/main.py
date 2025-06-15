@@ -24,7 +24,7 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Bratislava, Slovakia"
-N_VEHICLES = 250
+N_VEHICLES = 1000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 10000
@@ -33,11 +33,13 @@ TIME_WINDOW = 1200
 DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
-Session = sessionmaker(bind=engine)
-session = Session()
 
 # ---------- WORKFLOW ----------
 def main():
+    
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    
     # Step 1: Get or generate city
     city = session.query(City).filter_by(name=CITY_NAME).first()
     if not city:
@@ -76,18 +78,20 @@ def main():
         run_config.id, iteration_id,
         DIST_THRESH, SPEED_DIFF_THRESH
     )
+    
+    plot_map = plot_congestion_heatmap_interactive(edges, congestion_df,offset_deg=0.000025)
+    plot_map
+    plot_map.save("files/congestion_heatmap.html")
 
-    # Step 7: Plot heatmap
-    plot_congestion_heatmap(edges, congestion_df)
 
-    # Step 8: Filter routes for QUBO
-    filtered_vehicles = filter_routes_for_qubo(routes_df, congestion_df, threshold_percentile=0.9)
+    # Step 7: Filter routes for QUBO
+    filtered_vehicles = filter_routes_for_qubo(congestion_df, threshold_percentile=0.9)
     #print(filtered_vehicles)
     N_FILTERED = len(filtered_vehicles)
     print("Number of elements:", N_FILTERED)
 
-    # Step 9: Compute wights from congestion
-    weights_df = get_congestion_weights(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
+    # Step 8: Compute wights from congestion
+    weights_df = get_congestion_weights(session, run_config.id, iteration_id)
     print(weights_df)
     
 
@@ -95,12 +99,13 @@ def main():
     #weights_wo_normalization, max_weight = congestion_weights(weights_df, N_FILTERED, K_ALTERNATIVES, filtered_vehicles)
     #print(weights_normalized)
 
-    # Step 10: QUBO
+    # Step 9: QUBO
     Q, weights, _ = qubo_matrix(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, lambda_strategy="normalized", fixed_lambda=1.0)
  
     #print(Q)
 
-    # Step 11
+    # Step 10: Save QUBO matrix to CSV
+    # Note: The QUBO matrix is a dictionary of dictionaries, where Q[i][j] is the weight for the interaction between i and j.
     #QA testing qa_testing.py(N_FILTERED, K_ALTERNATIVES, weights_df, filtered_vehicles, run_config.id, iteration_id, session, lambda_strategy="normalized", fixed_lambda=1.0, comp_type='hybrid', num_reads=10):
     # post_qa_congestion.py(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0) -- need to check the vehicle_ids matching back to original
     # qa_congestion_df = post_qa_congestion(session, run_config.id, iteration_id, dist_thresh=10.0, speed_diff_thresh=2.0)
@@ -120,7 +125,7 @@ def main():
     size = N_FILTERED * K_ALTERNATIVES
     Q_df = qubo_dict_to_dataframe(Q, size)
     #print(Q_df.round(3))
-    Q_df.to_csv("files/qubo_matrix_1.csv", index=False)
+    Q_df.to_csv("files/qubo_matrix.csv", index=False)
 
     
 
@@ -135,6 +140,8 @@ def main():
     plot_map_dis
     plot_map_dis.save("files/shortest_routes_dis_congestion_heatmap.html")
 
+    session.close()
+    print("Workflow completed successfully!")
 
 if __name__ == "__main__":
     main()

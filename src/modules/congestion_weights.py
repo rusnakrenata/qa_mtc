@@ -8,10 +8,10 @@ def congestion_weights(weights_df, n, t, vehicle_ids):
     values = []
 
     for _, row in weights_df.iterrows():
-        i = vehicle_ids_index.get(row['vehicle_1'])
-        j = vehicle_ids_index.get(row['vehicle_2'])
-        k1 = int(row['vehicle_1_route']) - 1
-        k2 = int(row['vehicle_2_route']) - 1
+        i = vehicle_ids_index.get(row['vehicle1'])
+        j = vehicle_ids_index.get(row['vehicle2'])
+        k1 = int(row['vehicle1_route']) - 1
+        k2 = int(row['vehicle2_route']) - 1
 
         if i is None or j is None or not (0 <= k1 < t) or not (0 <= k2 < t):
             continue
