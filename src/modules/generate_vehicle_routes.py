@@ -8,6 +8,8 @@ from shapely.strtree import STRtree
 from shapely.geometry.base import BaseGeometry
 from pyproj import Transformer
 from datetime import datetime
+from scipy.spatial import KDTree
+import numpy as np
 
 from utils import (
     create_linestring_from_polyline,
@@ -16,7 +18,8 @@ from utils import (
     find_closest_osm_edge,
     calculate_initial_bearing,
     bearing_to_cardinal,
-    async_get_routes_from_valhalla
+    async_get_routes_from_valhalla,
+    find_approx_nearest_edge
 )
 
 nest_asyncio.apply()
@@ -89,8 +92,21 @@ def generate_vehicle_routes(
     edge_geometries = [geom if isinstance(geom, BaseGeometry) else geom.__geo_interface__ for geom in edges_proj['geometry'].values.tolist()]
     edge_tree = STRtree(edge_geometries)
     transformer = Transformer.from_crs("EPSG:4326", edges_proj.crs, always_xy=True)
+    
+
+
+    # 3. Compute centroids of edges
+    edges_proj['centroid'] = edges_proj.geometry.centroid
+
+    # 4. Convert centroids to numpy array for KDTree
+    coords = np.array([[pt.x, pt.y] for pt in edges_proj['centroid']])
+
+    # 5. Build the KDTree
+    edge_kdtree = KDTree(coords)
 
     for vehicle_idx, vehicle in vehicles.iterrows():
+        print(f"Processing vehicle {vehicle['vehicle_id']}...")
+        print(datetime.now())
         routes_data = routes_data_list[vehicle_idx]
         if not routes_data:
             print(f"No routes found for vehicle {vehicle['vehicle_id']}")
@@ -113,14 +129,16 @@ def generate_vehicle_routes(
 
             point_id = 0
             steps = convert_valhalla_leg_to_google_like_steps(route['leg'])
-            #print("convert_valhalla_leg_to_google_like_steps done.")
-            #print(datetime.now())
+            print("convert_valhalla_leg_to_google_like_steps done.")
+            print(datetime.now())
             points = get_points_in_time_window(steps)
-            #print("get_points_in_time_window done.")
-            #print(datetime.now())
+            print("get_points_in_time_window done.")
+            print(datetime.now())
             
 
             for point in points:
+                print("point.")
+                print(datetime.now())
                 point_id += 1
                 lat = point['location'].y
                 lon = point['location'].x
@@ -128,16 +146,21 @@ def generate_vehicle_routes(
                 speed = point['speed']
 
                 previous_location = points[point_id - 2]['location'] if point_id > 1 else Point(origin[0], origin[1])
+                
                 edge = find_closest_osm_edge(lon, lat, edges_proj, edge_tree, transformer=transformer)
-                #print("find_closest_osm_edge done.")
-                #print(datetime.now())
+                
+                print("find_closest_osm_edge done.")
+                print(datetime.now())
+                
+                edge = find_approx_nearest_edge(lat, lon, edges_proj, edge_kdtree, transformer=transformer)
+                print(datetime.now())
                 edge_id = edge['id']
                 bearing = calculate_initial_bearing(previous_location.y, previous_location.x, lat, lon)
-                #print("calculate_initial_bearing done.")
-                #print(datetime.now())
+                print("calculate_initial_bearing done.")
+                print(datetime.now())
                 cardinal = bearing_to_cardinal(bearing)
-                #print("bearing_to_cardinal done.")
-                #print(datetime.now())
+                print("bearing_to_cardinal done.")
+                print(datetime.now())
 
                 route_point = RoutePoint(
                     vehicle_id=vehicle_route.vehicle_id,
@@ -152,8 +175,11 @@ def generate_vehicle_routes(
                     lon=lon,
                     time=time_val
                 )
+                
                 session.add(route_point)
-
+                print("Route point added to session.")
+                print(datetime.now())
+                1/0
                 route_points_records.append({
                     "vehicle_id": vehicle_route.vehicle_id,
                     "route_id": vehicle_route.route_id,
