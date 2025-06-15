@@ -11,6 +11,10 @@ from scipy.spatial.distance import pdist, squareform
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import osmnx as ox
+import datetime
+
+
+
 
 def get_point_at_percentage(line_wkt, percentage):
     line = LineString([(21.2159377, 48.7126189), (21.2159939, 48.7125398), (21.2162822, 48.7121463)])
@@ -72,12 +76,25 @@ def bearing_to_cardinal(bearing):
 def find_closest_osm_edge(lat, lng, edges_gdf, edge_tree, transformer=None):
     x, y = transformer.transform(lng, lat)
     point = Point(x, y)
+    #print(f"Finding closest edge for point: {point}")
+    #print(datetime.datetime.now())
     index = edge_tree.nearest(point)
+    #print(datetime.datetime.now())
     edge_row = edges_gdf.iloc[index]
     return {
         'id': edge_row.get('id', None),
         'geometry': edge_row.geometry,
         'distance_meters': 0  # can add actual distance if needed
+    }
+
+def find_approx_nearest_edge(lat, lng, edges_gdf_proj, kdtree, transformer):
+    x, y = transformer.transform(lng, lat)
+    dist, idx = kdtree.query([x, y])
+    edge_row = edges_gdf_proj.iloc[idx]
+    return {
+        'id': edge_row.get('id', None),
+        'geometry': edge_row.geometry,
+        'distance_meters': dist
     }
 
 def animate_vehicles(G, vehicle_paths, interval=10):
@@ -178,3 +195,6 @@ def convert_valhalla_leg_to_google_like_steps(leg):
         }
         steps.append(step)
     return steps
+
+
+

@@ -36,7 +36,7 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
                     POW(SIN(RADIANS(b.lat - a.lat) / 2), 2) +
                     COS(RADIANS(a.lat)) * COS(RADIANS(b.lat)) *
                     POW(SIN(RADIANS(b.lon - a.lon) / 2), 2)
-                )) * 1000 AS distance, #because result of Harvesine formula is in km
+                )) * 1000 AS distance,
                 ABS(a.speed - b.speed) AS speed_diff
             FROM trafficOptimization.route_points a
             JOIN trafficOptimization.route_points b
@@ -49,7 +49,7 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
               AND a.run_configs_id = @run_configs_id
               AND b.run_configs_id = @run_configs_id
         ) AS pairwise
-        GROUP BY edge_id;
+        GROUP BY edge_id, vehicle1, vehicle2, vehicle1_route, vehicle2_route;
     """), {
         'dist_thresh': dist_thresh,
         'speed_diff_thresh': speed_diff_thresh,
@@ -59,20 +59,26 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
 
     congestion_data = result.fetchall()
 
-    for row in congestion_data:
-        congestion_map = CongestionMap(
+    # Efficient bulk insert
+    objects = [
+        CongestionMap(
             run_configs_id=run_config_id,
             iteration_id=iteration_id,
             edge_id=row.edge_id,
-            vehicle1 = row.vehicle1,
-            vehicle2 = row.vehicle2,
-            vehicle1_route = row.vehicle1_route,
-            vehicle2_route = row.vehicle2_route,
+            vehicle1=row.vehicle1,
+            vehicle2=row.vehicle2,
+            vehicle1_route=row.vehicle1_route,
+            vehicle2_route=row.vehicle2_route,
             congestion_score=row.weighted_congestion_score
         )
-        session.add(congestion_map)
+        for row in congestion_data
+    ]
 
+    session.bulk_save_objects(objects)
     session.commit()
 
     # Return results as DataFrame
-    return pd.DataFrame(congestion_data, columns=['edge_id', 'vehicle1', 'vehicle2', 'vehicle1_route', 'vehicle2_route', 'congestion_score'])
+    return pd.DataFrame(congestion_data, columns=[
+        'edge_id', 'vehicle1', 'vehicle1_route',
+        'vehicle2', 'vehicle2_route', 'congestion_score'
+    ])

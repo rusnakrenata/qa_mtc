@@ -21,35 +21,34 @@ def compute_shortest_routes(session, run_config_id, iteration_id, method="durati
     assert method in ("duration", "distance"), "Method must be 'duration' or 'distance'"
 
     sql = sa_text(f"""
-        WITH shortest_routes AS (
-            SELECT vehicle_id, MIN({method}) AS min_value
-            FROM vehicle_routes
-            WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-            GROUP BY vehicle_id
-        ),
-        selected_routes AS (
-            SELECT vr.route_id, vr.vehicle_id
-            FROM vehicle_routes vr
-            JOIN shortest_routes sr
-              ON vr.vehicle_id = sr.vehicle_id AND vr.{method} = sr.min_value
-            WHERE vr.run_configs_id = :run_config_id AND vr.iteration_id = :iteration_id
-        )
-        SELECT edge_id, sum(congestion_score) as congestion_score
-        FROM 
-        (
-        SELECT distinct edge_id, vehicle1 as vehicle, congestion_score/2 as congestion_score
-        FROM congestion_map cm 
-        INNER JOIN selected_routes sr
-        ON CONCAT(cm.vehicle1,vehicle1_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
-        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+    WITH shortest_routes AS (
+    SELECT vehicle_id, MIN({method}) AS min_value
+    FROM vehicle_routes
+    WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+    GROUP BY vehicle_id
+    ),
+    selected_routes AS (
+        SELECT vr.route_id, vr.vehicle_id
+        FROM vehicle_routes vr
+        JOIN shortest_routes sr
+        ON vr.vehicle_id = sr.vehicle_id AND vr.{method} = sr.min_value
+        WHERE vr.run_configs_id = :run_config_id AND vr.iteration_id = :iteration_id
+    )
+    SELECT edge_id, SUM(congestion_score) AS congestion_score
+    FROM (
+        SELECT DISTINCT cm.edge_id, cm.vehicle1 AS vehicle, cm.congestion_score / 2 AS congestion_score
+        FROM congestion_map cm
+        JOIN selected_routes sr
+        ON cm.vehicle1 = sr.vehicle_id AND cm.vehicle1_route = sr.route_id
+        WHERE cm.run_configs_id = :run_config_id AND cm.iteration_id = :iteration_id
         UNION ALL
-        SELECT distinct edge_id, vehicle2 as vehicle, congestion_score/2 as congestion_score
-        FROM congestion_map cm 
-        INNER JOIN selected_routes sr
-        ON CONCAT(cm.vehicle2,vehicle2_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
-        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-        ) a
-        group by edge_id
+        SELECT DISTINCT cm.edge_id, cm.vehicle2 AS vehicle, cm.congestion_score / 2 AS congestion_score
+        FROM congestion_map cm
+        JOIN selected_routes sr
+        ON cm.vehicle2 = sr.vehicle_id AND cm.vehicle2_route = sr.route_id
+        WHERE cm.run_configs_id = :run_config_id AND cm.iteration_id = :iteration_id
+    ) AS derived
+    GROUP BY edge_id;
     """)
 
     result = session.execute(sql, {

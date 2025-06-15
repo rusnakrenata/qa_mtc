@@ -53,7 +53,7 @@ class Node(Base):
     __tablename__ = 'nodes'
     
     id = Column(Integer, primary_key=True)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    city_id = Column(Integer,  nullable=False)
     osmid = Column(String(255))
     x = Column(Numeric(9,6))
     y = Column(Numeric(9,6))
@@ -69,7 +69,7 @@ class Edge(Base):
     __tablename__ = 'edges'
     
     id = Column(Integer, primary_key=True)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    city_id = Column(Integer,  nullable=False)
     #osmid = Column(Integer, nullable=False, unique=True)
     # Removed u, v columns, no longer representing nodes
     u = Column(String(255))
@@ -92,7 +92,7 @@ class RunConfig(Base):
     __tablename__ = 'run_configs'
 
     id = Column(Integer, primary_key=True)
-    city_id = Column(Integer, ForeignKey('cities.id'), nullable=False)
+    city_id = Column(Integer,  nullable=False)
     n_cars = Column(Integer)
     k_alternatives = Column(Integer)
     min_length = Column(Integer)
@@ -109,12 +109,12 @@ class Vehicle(Base):
 
     id = Column(Integer, primary_key=True)
     vehicle_id = Column(BigInteger, nullable=False) 
-    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)  # Link to RunConfig
+    run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig
     iteration_id = Column(Integer, nullable=False) 
-    origin_edge_id = Column(Integer, ForeignKey('edges.id'))#, related_name='origin_edge')
+    origin_edge_id = Column(Integer, nullable=False)#, related_name='origin_edge')
     origin_position_on_edge = Column(Float)
     origin_geometry = Column(String(255), nullable=True)
-    destination_edge_id = Column(Integer, ForeignKey('edges.id'))#, related_name='destination_edge')
+    destination_edge_id = Column(Integer, nullable=False)#, related_name='destination_edge')
     destination_position_on_edge = Column(Float)
     destination_geometry = Column(String(255), nullable=True)
     created_at = Column(DateTime, default= datetime.utcnow)
@@ -144,7 +144,7 @@ class RoutePoint(Base):
     iteration_id = Column(Integer, nullable=False) 
     route_id = Column(Integer, nullable=False) 
     point_id = Column(Integer,  nullable=False) #ForeignKey('vehicle_routes.id'),
-    edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False) # closes edge
+    edge_id = Column(Integer,  nullable=False) # closes edge
     cardinal = Column(String(255), nullable=True) # cardinal direction 
     speed = Column(Float)
     lat = Column(Numeric(9,6))
@@ -157,14 +157,14 @@ class CongestionMap(Base):
     __tablename__ = 'congestion_map'
 
     id = Column(Integer, primary_key=True)
-    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)
+    run_configs_id = Column(Integer,  nullable=False)
     iteration_id = Column(Integer, nullable=False)
-    edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False)
+    edge_id = Column(Integer,  nullable=False)
     vehicle1 = Column(Integer,  nullable=False)
     vehicle1_route = Column(Integer, nullable=False)
     vehicle2 = Column(Integer,  nullable=False)
     vehicle2_route = Column(Integer, nullable=False)
-    congestion_score = Column(Float, nullable=True)
+    congestion_score = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -172,7 +172,7 @@ class QAResult(Base):
     __tablename__ = 'qa_results'
 
     id = Column(Integer, primary_key=True)
-    run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)
+    run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     lambda_strategy = Column(String(50))
     lambda_value = Column(Float)
@@ -192,53 +192,19 @@ class QAResult(Base):
 
 # indexes
 
-# CREATE INDEX idx_run_configs_id ON vehicle_routes(run_configs_id);
+# -- Helps with self-join on time, edge_id, cardinal
+# CREATE INDEX idx_time_edge_cardinal_vehicle ON route_points(time, edge_id, cardinal, vehicle_id);
 
+# -- Helps WHERE clause filtering
+# CREATE INDEX idx_iter_run_vehicle ON route_points(iteration_id, run_configs_id, vehicle_id);
 
+# -- Helps calculations (if not covered above)
+# CREATE INDEX idx_lat_lon_speed ON route_points(lat, lon, speed);
 
-# CREATE INDEX idx_vr_config_vehicle_duration
-# ON trafficOptimization.vehicle_routes (
-#   run_configs_id,
-#   iteration_id,
-#   vehicle_id,
-#   duration
-# );
+# CREATE INDEX idx_as_pk ON route_points(run_configs_id, iteration_id, time, edge_id, vehicle_id);
 
-# CREATE INDEX idx_vr_config_vehicle_distance
-# ON trafficOptimization.vehicle_routes (
-#   run_configs_id,
-#   iteration_id,
-#   vehicle_id,
-#   distance
-# );
-
-
-# CREATE INDEX idx_route_points_join_filter
-# ON trafficOptimization.route_points (
-#     iteration_id,
-#     run_configs_id,
-#     time,
-#     edge_id,
-#     cardinal,
-#     vehicle_id
-# );
-
-
-
-# CREATE INDEX idx_route_points_cover
-# ON trafficOptimization.route_points (
-#     iteration_id,
-#     run_configs_id,
-#     time,
-#     edge_id,
-#     cardinal,
-#     vehicle_id,
-#     route_id,
-#     lat,
-#     lon,
-#     speed
-# );
-
+# CREATE INDEX idx_run_iter_vehicle_method
+# ON vehicle_routes(run_configs_id, iteration_id, vehicle_id);
     
 ####### --TABLES-- #######
 
