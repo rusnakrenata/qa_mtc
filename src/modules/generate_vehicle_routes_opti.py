@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 from shapely.geometry import Point
+from shapely.strtree import STRtree
 from pyproj import Transformer
 from shapely.geometry.base import BaseGeometry
 from concurrent.futures import ThreadPoolExecutor
@@ -62,7 +63,8 @@ def process_vehicle_route(vehicle_data):
     vehicle_routes_records = []
 
     edges_proj = edges_proj_dict['edges']
-    edge_tree = edges_proj.sindex  # Use spatial index from GeoPandas
+    edge_geometries = [geom if isinstance(geom, BaseGeometry) else geom.__geo_interface__ for geom in edges_proj['geometry'].values.tolist()]
+    edge_tree = STRtree(edge_geometries)
     transformer = Transformer.from_crs("EPSG:4326", edges_proj_dict['crs'], always_xy=True)
 
     origin = (vehicle['origin_geometry'].x, vehicle['origin_geometry'].y)
