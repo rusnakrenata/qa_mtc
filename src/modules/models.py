@@ -160,6 +160,10 @@ class CongestionMap(Base):
     run_configs_id = Column(Integer, ForeignKey('run_configs.id'), nullable=False)
     iteration_id = Column(Integer, nullable=False)
     edge_id = Column(Integer, ForeignKey('edges.id'), nullable=False)
+    vehicle1 = Column(Integer,  nullable=False)
+    vehicle1_route = Column(Integer, nullable=False)
+    vehicle2 = Column(Integer,  nullable=False)
+    vehicle2_route = Column(Integer, nullable=False)
     congestion_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

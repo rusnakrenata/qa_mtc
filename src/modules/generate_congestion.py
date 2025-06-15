@@ -16,6 +16,10 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
     result = session.execute(sa_text("""
         SELECT
             edge_id,
+            vehicle1, 
+            vehicle1_route,
+            vehicle2, 
+            vehicle2_route,
             SUM(CASE 
                 WHEN distance < @dist_thresh AND speed_diff < @speed_diff_thresh THEN 
                     (1 / ((1 + distance) * (1 + speed_diff)))
@@ -24,6 +28,10 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
         FROM (
             SELECT
                 a.edge_id,
+                a.vehicle_id as vehicle1,
+                b.vehicle_id as vehicle2,
+                a.route_id as vehicle1_route,
+                b.route_id as vehicle2_route,
                 6371 * 2 * ASIN(SQRT(
                     POW(SIN(RADIANS(b.lat - a.lat) / 2), 2) +
                     COS(RADIANS(a.lat)) * COS(RADIANS(b.lat)) *
@@ -56,6 +64,10 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
             run_configs_id=run_config_id,
             iteration_id=iteration_id,
             edge_id=row.edge_id,
+            vehicle1 = row.vehicle1,
+            vehicle2 = row.vehicle2,
+            vehicle1_route = row.vehicle1_route,
+            vehicle2_route = row.vehicle2_route,
             congestion_score=row.weighted_congestion_score
         )
         session.add(congestion_map)
@@ -63,4 +75,4 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
     session.commit()
 
     # Return results as DataFrame
-    return pd.DataFrame(congestion_data, columns=['edge_id', 'congestion_score'])
+    return pd.DataFrame(congestion_data, columns=['edge_id', 'vehicle1', 'vehicle2', 'vehicle1_route', 'vehicle2_route', 'congestion_score'])

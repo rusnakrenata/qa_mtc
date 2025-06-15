@@ -33,17 +33,23 @@ def compute_shortest_routes(session, run_config_id, iteration_id, method="durati
             JOIN shortest_routes sr
               ON vr.vehicle_id = sr.vehicle_id AND vr.{method} = sr.min_value
             WHERE vr.run_configs_id = :run_config_id AND vr.iteration_id = :iteration_id
-        ),
-        selected_edges as (
-        	SELECT DISTINCT edge_id
-	        FROM route_points
-	        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-	          AND CONCAT(vehicle_id,route_id) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes))
-        SELECT cm.edge_id, SUM(congestion_score) AS congestion_score
+        )
+        SELECT edge_id, sum(congestion_score) as congestion_score
+        FROM 
+        (
+        SELECT distinct edge_id, vehicle1 as vehicle, congestion_score/2 as congestion_score
         FROM congestion_map cm 
-        INNER JOIN selected_edges se on cm.edge_id  = se.edge_id
+        INNER JOIN selected_routes sr
+        ON CONCAT(cm.vehicle1,vehicle1_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
         WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-        GROUP BY edge_id
+        UNION ALL
+        SELECT distinct edge_id, vehicle2 as vehicle, congestion_score/2 as congestion_score
+        FROM congestion_map cm 
+        INNER JOIN selected_routes sr
+        ON CONCAT(cm.vehicle2,vehicle2_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
+        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+        ) a
+        group by edge_id
     """)
 
     result = session.execute(sql, {
