@@ -1,18 +1,18 @@
 import pandas as pd
+from datetime import datetime
 from sqlalchemy import text as sa_text
 
 def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dist_thresh, speed_diff_thresh):
-    # Delete previous congestion data for the iteration
-    session.query(CongestionMap).filter_by(iteration_id=iteration_id).delete()
-    session.commit()
 
-    # Set MySQL user variables
+
+    # Step 2: Set user-defined thresholds in MySQL
     session.execute(sa_text("SET @dist_thresh := :dist_thresh"), {'dist_thresh': dist_thresh})
     session.execute(sa_text("SET @speed_diff_thresh := :speed_diff_thresh"), {'speed_diff_thresh': speed_diff_thresh})
     session.execute(sa_text("SET @iteration := :iteration_id"), {'iteration_id': iteration_id})
     session.execute(sa_text("SET @run_configs_id := :run_configs_id"), {'run_configs_id': run_config_id})
 
-    # Execute SQL query
+    print(f"Running congestion calculation SELECT at:", datetime.now())
+    # Step 3: Run congestion calculation query
     result = session.execute(sa_text("""
         SELECT
             edge_id,
@@ -40,44 +40,58 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
                 ABS(a.speed - b.speed) AS speed_diff
             FROM trafficOptimization.route_points a
             JOIN trafficOptimization.route_points b
-                ON a.time = b.time
-                AND a.edge_id = b.edge_id
-                AND a.cardinal = b.cardinal
+                ON a.edge_id = b.edge_id
                 AND a.vehicle_id < b.vehicle_id
+                AND a.time = b.time
+                AND a.cardinal = b.cardinal
             WHERE a.iteration_id = @iteration
               AND b.iteration_id = @iteration
               AND a.run_configs_id = @run_configs_id
               AND b.run_configs_id = @run_configs_id
         ) AS pairwise
-        GROUP BY edge_id, vehicle1, vehicle2, vehicle1_route, vehicle2_route;
-    """), {
-        'dist_thresh': dist_thresh,
-        'speed_diff_thresh': speed_diff_thresh,
-        'iteration_id': iteration_id,
-        'run_configs_id': run_config_id
-    })
+        GROUP BY edge_id, vehicle1, vehicle2, vehicle1_route, vehicle2_route
+    """))
 
+    print("Congestion calculation SELECT completed at:", datetime.now())
     congestion_data = result.fetchall()
 
-    # Efficient bulk insert
-    objects = [
-        CongestionMap(
-            run_configs_id=run_config_id,
-            iteration_id=iteration_id,
-            edge_id=row.edge_id,
-            vehicle1=row.vehicle1,
-            vehicle2=row.vehicle2,
-            vehicle1_route=row.vehicle1_route,
-            vehicle2_route=row.vehicle2_route,
-            congestion_score=row.weighted_congestion_score
+    if not congestion_data:
+        return pd.DataFrame(columns=[
+            'edge_id', 'vehicle1', 'vehicle1_route',
+            'vehicle2', 'vehicle2_route', 'congestion_score'
+        ])
+
+    print("Convert results into rows for executemany at:", datetime.now())
+    # Step 4: Convert results into rows for executemany
+    insert_rows = [{
+        'run_configs_id': run_config_id,
+        'iteration_id': iteration_id,
+        'edge_id': row.edge_id,
+        'vehicle1': row.vehicle1,
+        'vehicle2': row.vehicle2,
+        'vehicle1_route': row.vehicle1_route,
+        'vehicle2_route': row.vehicle2_route,
+        'congestion_score': row.weighted_congestion_score,
+        'created_at': datetime.now()
+    } for row in congestion_data]
+
+    print("Insert_rows prepared for executemany at:", datetime.now())
+    # Step 5: Use raw INSERT for fast executemany
+    insert_sql = sa_text("""
+        INSERT INTO congestion_map (
+            run_configs_id, iteration_id, edge_id,
+            vehicle1, vehicle2, vehicle1_route, vehicle2_route, congestion_score, created_at
+        ) VALUES (
+            :run_configs_id, :iteration_id, :edge_id,
+            :vehicle1, :vehicle2, :vehicle1_route, :vehicle2_route, :congestion_score, :created_at
         )
-        for row in congestion_data
-    ]
+    """)
 
-    session.bulk_save_objects(objects)
+    session.execute(insert_sql, insert_rows)
     session.commit()
+    print("Congestion data inserted at:", datetime.now())
 
-    # Return results as DataFrame
+    # Step 6: Return as DataFrame
     return pd.DataFrame(congestion_data, columns=[
         'edge_id', 'vehicle1', 'vehicle1_route',
         'vehicle2', 'vehicle2_route', 'congestion_score'

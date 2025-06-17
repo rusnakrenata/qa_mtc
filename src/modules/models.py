@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text, Numeric
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text, Numeric, Index, PrimaryKeyConstraint
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -10,7 +10,8 @@ db_password = "Test1234"
 db_host = "77.93.155.81"
 db_name = "trafficOptimization"
 
-connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+#connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+connection_url = f"mysql+mysqldb://{db_user}:{db_password}@{db_host}/{db_name}"
 
 # Create SQLAlchemy engine
 engine = create_engine(connection_url,
@@ -124,7 +125,7 @@ class Vehicle(Base):
 class VehicleRoute(Base):
     __tablename__ = 'vehicle_routes'
 
-    id = Column(Integer, primary_key=True)
+    #id = Column(Integer, autoincrement=True, nullable=False)
     vehicle_id = Column(Integer, nullable=False) #ForeignKey('vehicles.id'),
     run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig ForeignKey('run_configs.id'),
     iteration_id = Column(Integer, nullable=False) 
@@ -134,24 +135,45 @@ class VehicleRoute(Base):
     duration_in_traffic = Column(Integer)
     created_at = Column(DateTime, default= datetime.utcnow)
 
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_vehicle_method', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+
     
 class RoutePoint(Base):
     __tablename__ = 'route_points'
 
-    id = Column(Integer, primary_key=True)
-    vehicle_id = Column(Integer,  nullable=False) #ForeignKey('vehicles.id'),
-    run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig ForeignKey('run_configs.id'),
-    iteration_id = Column(Integer, nullable=False) 
-    route_id = Column(Integer, nullable=False) 
-    point_id = Column(Integer,  nullable=False) #ForeignKey('vehicle_routes.id'),
-    edge_id = Column(Integer,  nullable=False) # closes edge
-    cardinal = Column(String(255), nullable=True) # cardinal direction 
+    #id = Column(Integer, autoincrement=True, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    point_id = Column(Integer, nullable=False)
+    edge_id = Column(Integer, nullable=False)
+    cardinal = Column(String(255), nullable=True)
     speed = Column(Float)
-    lat = Column(Numeric(9,6))
-    lon = Column(Numeric(9,6))
+    lat = Column(Numeric(9, 6))
+    lon = Column(Numeric(9, 6))
     time = Column(Integer)
-    created_at = Column(DateTime, default= datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        # Composite Primary Key - OK as-is, used for uniqueness and integrity
+        PrimaryKeyConstraint(
+            'run_configs_id', 'iteration_id', 
+            'edge_id', 'vehicle_id', 'route_id', 'point_id', 'time' ),
+        # Supports join/filter conditions: a.time = b.time AND a.edge_id = b.edge_id AND a.cardinal = b.cardinal
+        Index('idx_time_edge_cardinal', 'time', 'edge_id', 'cardinal'),
+        # Used when selecting filtered points for one iteration/run
+        Index('idx_run_iter_vehicle', 'run_configs_id', 'iteration_id', 'vehicle_id'),
+        # Improves performance for spatial queries (Haversine) + speed difference
+        Index('idx_lat_lon_speed', 'lat', 'lon', 'speed'),
+        # Optional: Helps if `route_id` is often queried separately
+        Index('idx_route', 'route_id')
+    )
+    
 
 class CongestionMap(Base):
     __tablename__ = 'congestion_map'
@@ -190,21 +212,6 @@ class QAResult(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
 
-# indexes
-
-# -- Helps with self-join on time, edge_id, cardinal
-# CREATE INDEX idx_time_edge_cardinal_vehicle ON route_points(time, edge_id, cardinal, vehicle_id);
-
-# -- Helps WHERE clause filtering
-# CREATE INDEX idx_iter_run_vehicle ON route_points(iteration_id, run_configs_id, vehicle_id);
-
-# -- Helps calculations (if not covered above)
-# CREATE INDEX idx_lat_lon_speed ON route_points(lat, lon, speed);
-
-# CREATE INDEX idx_as_pk ON route_points(run_configs_id, iteration_id, time, edge_id, vehicle_id);
-
-# CREATE INDEX idx_run_iter_vehicle_method
-# ON vehicle_routes(run_configs_id, iteration_id, vehicle_id);
     
 ####### --TABLES-- #######
 

@@ -60,14 +60,14 @@ def post_qa_congestion(session, run_config_id, iteration_id):
         SELECT distinct edge_id, vehicle1 as vehicle, congestion_score
         FROM congestion_map cm 
         INNER JOIN temp_selected_routes sr
-        ON CONCAT(cm.vehicle1,vehicle1_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
-        WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+        ON cm.vehicle1 = sr.vehicle_id AND cm.vehicle1_route = sr.route_id
+        WHERE cm.run_configs_id = :run_config_id AND cm.iteration_id = :iteration_id
         UNION ALL
         SELECT distinct edge_id, vehicle2 as vehicle, congestion_score
         FROM congestion_map cm 
         INNER JOIN temp_selected_routes sr
-        ON CONCAT(cm.vehicle2,vehicle2_route) IN (SELECT CONCAT(vehicle_id,route_id) FROM selected_routes)
-        WHERE run_configs_id = :un_config_id AND iteration_id = :iteration_id
+        ON cm.vehicle2 = sr.vehicle_id AND cm.vehicle2_route = sr.route_id
+        WHERE cm.run_configs_id = :run_config_id AND cm.iteration_id = :iteration_id
         ) a
         group by edge_id
     """), {

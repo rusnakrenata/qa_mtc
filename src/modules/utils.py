@@ -8,6 +8,7 @@ from shapely.geometry import Point, LineString
 from shapely.strtree import STRtree
 from pyproj import Transformer
 from scipy.spatial.distance import pdist, squareform
+from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import osmnx as ox
@@ -72,6 +73,22 @@ def bearing_to_cardinal(bearing):
     directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     ix = round(bearing / 45) % 8
     return directions[ix]
+
+def find_closest_osm_edge_2(lat, lng, edge_tree, transformer=None, geometry_to_id=None):
+    x, y = transformer.transform(lng, lat)
+    point = Point(x, y)
+
+    geometry, dist = edge_tree.query_nearest(point, return_distance=True)
+    # 🛠 FIX: If geometry is accidentally wrapped in a numpy array, extract it
+    if isinstance(geometry, np.ndarray):
+        geometry = geometry.item()
+
+    edge_id = geometry_to_id.get(geometry, None)
+    return {
+        'id': edge_id,
+        'geometry': geometry,
+        'distance_meters': dist
+    }
 
 def find_closest_osm_edge(lat, lng, edges_gdf, edge_tree, transformer=None):
     x, y = transformer.transform(lng, lat)
@@ -196,5 +213,42 @@ def convert_valhalla_leg_to_google_like_steps(leg):
         steps.append(step)
     return steps
 
+
+######################### 
+def build_edge_indices(edges_gdf):
+    # Compute centroids of edges for cKDTree
+    centroids = edges_gdf.geometry.centroid
+    centroid_coords = np.array([[pt.x, pt.y] for pt in centroids])
+    ckdtree = cKDTree(centroid_coords)
+
+    # Build STRtree for refinement
+    edge_geoms = edges_gdf.geometry.tolist()
+    strtree = STRtree(edge_geoms)
+
+    # Map geometry back to index in edges_gdf
+    geom_to_index = {geom: idx for idx, geom in enumerate(edge_geoms)}
+    return ckdtree, strtree, geom_to_index, centroid_coords
+
+def find_nearest_edge_hybrid(lat, lng, transformer, edges_gdf,
+                              ckdtree, strtree, geom_to_index,
+                              centroid_coords, k=5):
+    # Transform lat/lng to projected x, y
+    x, y = transformer.transform(lng, lat)
+    query_point = Point(x, y)
+
+    # Step 1: Fast k-NN centroid lookup using cKDTree
+    dists, indices = ckdtree.query([x, y], k=k)
+
+    # Step 2: Refine with STRtree using true distance to geometry
+    candidate_geometries = [edges_gdf.geometry.iloc[i] for i in indices]
+    nearest_geom = min(candidate_geometries, key=lambda geom: query_point.distance(geom))
+    final_index = geom_to_index[nearest_geom]
+    edge_row = edges_gdf.iloc[final_index]
+
+    return {
+        'id': edge_row.get('id', None),
+        'geometry': edge_row.geometry,
+        'distance_meters': query_point.distance(nearest_geom)
+    }
 
 
