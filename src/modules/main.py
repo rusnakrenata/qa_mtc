@@ -7,7 +7,7 @@ from store_city_to_db import store_city_to_db
 from get_or_create_run_config import get_or_create_run_config
 from create_iteration import create_iteration
 from generate_vehicles import generate_vehicles
-from generate_vehicle_routes_opti import generate_vehicle_routes
+from generate_vehicle_routes_STree import generate_vehicle_routes
 from generate_congestion import generate_congestion
 from plot_congestion_heatmap import plot_congestion_heatmap, plot_congestion_heatmap_interactive
 from filter_routes_for_qubo import filter_routes_for_qubo
@@ -24,18 +24,19 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Košice, Slovakia"
-N_VEHICLES = 25000
+N_VEHICLES = 2500
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
-MAX_LENGTH = 10000
+MAX_LENGTH = 6000
 TIME_STEP = 10
-TIME_WINDOW = 1200
+TIME_WINDOW = 800
 DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
 
 # ---------- WORKFLOW ----------
 def main():
+
     
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -46,8 +47,8 @@ def main():
     if not city:
         nodes, edges = get_city_graph(CITY_NAME)
         city = store_city_to_db(session, CITY_NAME, nodes, edges, City, Node, Edge)
-    else:
-        nodes, edges = get_city_data_from_db(session, city.id)
+    
+    nodes, edges = get_city_data_from_db(session, city.id)
 
     # Step 2: Create or fetch run configuration
     run_config = get_or_create_run_config(
@@ -69,11 +70,14 @@ def main():
 
     # Step 5: Generate vehicle routes
     print("Generate vehicle routes at:", datetime.now())
-    routes_df = generate_vehicle_routes(
+
+    generate_vehicle_routes(
         session, VehicleRoute, RoutePoint,
-        API_KEY, run_config.id, iteration_id, vehicles_gdf,
-        edges, K_ALTERNATIVES, TIME_STEP, TIME_WINDOW
+        API_KEY, run_config.id, iteration_id,
+        vehicles_gdf, edges, K_ALTERNATIVES, TIME_STEP, TIME_WINDOW
     )
+ 
+    print("Vehicle routes generated at:", datetime.now())
 
  
     # Step 6: Compute congestion
@@ -84,11 +88,8 @@ def main():
         run_config.id, iteration_id,
         DIST_THRESH, SPEED_DIFF_THRESH
     )
+    print("Congestion computed at:", datetime.now())
     
-    plot_map = plot_congestion_heatmap_interactive(edges, congestion_df,offset_deg=0.000025)
-    plot_map
-    plot_map.save("files/congestion_heatmap.html")
-
 
     # Step 7: Filter routes for QUBO
     filtered_vehicles = filter_routes_for_qubo(congestion_df, threshold_percentile=0.9)
@@ -133,7 +134,9 @@ def main():
     #print(Q_df.round(3))
     Q_df.to_csv("files/qubo_matrix.csv", index=False)
 
-    
+    plot_map = plot_congestion_heatmap_interactive(edges, congestion_df,offset_deg=0.000025)
+    plot_map
+    plot_map.save("files/congestion_heatmap.html")
 
     shortes_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
     plot_map_dur = plot_congestion_heatmap_interactive(edges, shortes_routes_dur_df,offset_deg=0.000025)
