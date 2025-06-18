@@ -1,4 +1,4 @@
-# Minimizing Traffic Congestion via QUBO Formulation: Car-to-Trase Assignment Problem
+# Quantum-Inspired Traffic Optimization: A Scalable and Dynamic Approach for Congestion Minimization in Urban Environments
 [[PAPER]]() 
 
 
