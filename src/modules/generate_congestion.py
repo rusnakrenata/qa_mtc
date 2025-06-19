@@ -39,19 +39,22 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
                 )) * 1000 AS distance,
                 ABS(a.speed - b.speed) AS speed_diff
             FROM trafficOptimization.route_points a
-            JOIN trafficOptimization.route_points b
-                ON a.edge_id = b.edge_id
-                AND a.vehicle_id < b.vehicle_id
+            INNER JOIN trafficOptimization.route_points b
+                ON a.run_configs_id = @run_configs_id
+                AND b.run_configs_id = @run_configs_id
+                AND a.iteration_id = @iteration
+                AND b.iteration_id = @iteration
+                AND a.edge_id = b.edge_id
                 AND a.time = b.time
                 AND a.cardinal = b.cardinal
-            WHERE a.iteration_id = @iteration
-              AND b.iteration_id = @iteration
-              AND a.run_configs_id = @run_configs_id
-              AND b.run_configs_id = @run_configs_id
+                AND a.vehicle_id < b.vehicle_id
+                AND ABS(a.lat - b.lat) < 0.01
+                AND ABS(a.lon - b.lon) < 0.01
         ) AS pairwise
         GROUP BY edge_id, vehicle1, vehicle2, vehicle1_route, vehicle2_route
     """))
 
+    t1 = datetime.now()
     print("Congestion calculation SELECT completed at:", datetime.now())
     congestion_data = result.fetchall()
 
@@ -89,7 +92,7 @@ def generate_congestion(session, CongestionMap, run_config_id, iteration_id, dis
 
     session.execute(insert_sql, insert_rows)
     session.commit()
-    print("Congestion data inserted at:", datetime.now())
+    print("Congestion data inserted in:", datetime.now() - t1)
 
     # Step 6: Return as DataFrame
     return pd.DataFrame(congestion_data, columns=[

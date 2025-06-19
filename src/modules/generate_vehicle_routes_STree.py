@@ -22,7 +22,7 @@ from utils import (
     calculate_initial_bearing,
     bearing_to_cardinal
 )
-MAX_WORKERS = 8
+MAX_WORKERS = 10
 
 def insert_in_batches(session, model_class, obj_list, batch_size=5000):
     # Use all actual DB columns (no 'id' filter since you confirmed it's not used)
@@ -206,12 +206,12 @@ def generate_vehicle_routes(session, VehicleRoute, RoutePoint, api_key, run_conf
     
     
     ## INSERT route points trva dlho!!!
-    print("ALTER TABLE route_points DISABLE KEYS:", datetime.now(), len(route_objs))
-    session.execute(text("ALTER TABLE route_points DISABLE KEYS")) 
+    #print("ALTER TABLE route_points DISABLE KEYS:", datetime.now(), len(route_objs))
+    #session.execute(text("ALTER TABLE route_points DISABLE KEYS")) 
     print("Before bulk insert, number of route point:", datetime.now(), len(route_objs))
     insert_in_batches(session, RoutePoint, route_objs , batch_size=5000)    
-    print("ALTER TABLE route_points ENABLE KEYS")
-    session.execute(text("ALTER TABLE route_points ENABLE KEYS"))
+    #print("ALTER TABLE route_points ENABLE KEYS")
+    #session.execute(text("ALTER TABLE route_points ENABLE KEYS"))
     
     session.commit()
 
