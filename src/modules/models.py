@@ -164,14 +164,8 @@ class RoutePoint(Base):
         PrimaryKeyConstraint(
             'run_configs_id', 'iteration_id', 
             'edge_id', 'vehicle_id', 'route_id', 'point_id', 'time' ),
-        # Supports join/filter conditions: a.time = b.time AND a.edge_id = b.edge_id AND a.cardinal = b.cardinal
-        Index('idx_time_edge_cardinal', 'time', 'edge_id', 'cardinal'),
-        # Used when selecting filtered points for one iteration/run
-        Index('idx_run_iter_vehicle', 'run_configs_id', 'iteration_id', 'vehicle_id'),
-        # Improves performance for spatial queries (Haversine) + speed difference
-        Index('idx_lat_lon_speed', 'lat', 'lon', 'speed'),
-        # Optional: Helps if `route_id` is often queried separately
-        Index('idx_route', 'route_id')
+        Index('edge_id', 'time', 'cardinal', 'vehicle_id','lat','lon')
+
     )
     
 

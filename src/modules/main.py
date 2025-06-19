@@ -16,6 +16,7 @@ from normalize_congestion_weights import normalize_congestion_weights
 from congestion_weights import congestion_weights
 from qubo_matrix import qubo_matrix
 from compute_shortest_routes import compute_shortest_routes
+from kill_alldb_processes import kill_alldb_processes
 import datetime
 
 # ---------- CONFIGURATION ----------
@@ -37,8 +38,9 @@ SPEED_DIFF_THRESH = 2
 # ---------- WORKFLOW ----------
 def main():
 
-    
-    Session = sessionmaker(bind=engine)
+    #kill_alldb_processes()
+
+    Session = sessionmaker(bind=engine, autocommit=False)
     session = Session()
     print("Starting workflow at:", datetime.now())    
     
