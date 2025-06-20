@@ -25,7 +25,7 @@ from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRo
 
 API_KEY = 'AIzaSyCawuGvoiyrHOh3RyJdq7yzFCcG5smrZCI'
 CITY_NAME = "Košice, Slovakia"
-N_VEHICLES = 2500
+N_VEHICLES = 25000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 200
 MAX_LENGTH = 6000
