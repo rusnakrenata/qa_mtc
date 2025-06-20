@@ -83,4 +83,4 @@ def qubo_matrix(
                 q2 = i * t + k2
                 Q[(q1, q2)] += 2 * lambda_penalty
 
-    return dict(Q), w, vehicle_ids_filtered
+    return dict(Q), vehicle_ids_filtered

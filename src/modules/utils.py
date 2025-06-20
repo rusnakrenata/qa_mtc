@@ -182,7 +182,7 @@ def normalize_valhalla_route(route, route_index=0):
 async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of_alternative_routes):
 
 
-    base_url = "http://77.93.155.81:8002/route"
+    base_url = "http://147.232.204.254:8002/route"
     payload = {
         "locations": [{"lat": origin[1], "lon": origin[0]}, {"lat": destination[1], "lon": destination[0]}],
         "costing": "auto",
