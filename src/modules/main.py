@@ -90,16 +90,8 @@ def main():
     vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
 
     # Step 8: QUBO matrix construction
-    Q, weights, filtered_vehicle_ids = qubo_matrix(
-        n=N_VEHICLES,
-        t=K_ALTERNATIVES,
-        w_df=weights_df,
-        vehicle_ids=vehicle_ids,
-        lambda_strategy="normalized",
-        fixed_lambda=1.0,
-        filtering_percentage=0.1,
-        max_qubo_size=None
-    )
+    Q, filtered_vehicle_ids = qubo_matrix(
+        N_VEHICLES, K_ALTERNATIVES, weights_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.0, filtering_percentage=0.1, max_qubo_size=None )
 
     N_FILTERED = len(filtered_vehicle_ids)
     print("Filtered vehicles number:", N_FILTERED)
@@ -118,17 +110,17 @@ def main():
     Q_df.to_csv("files/qubo_matrix.csv", index=False)
 
     # Step 10: Visualize original congestion
-    plot_map = plot_congestion_heatmap_interactive(edges, congestion_df, offset_deg=0.000025)
+    plot_map = plot_congestion_heatmap_interactive(edges, congestion_df, offset_deg=0.0000025)
     plot_map.save("files/congestion_heatmap.html")
 
     # Step 11: Visualize congestion for shortest routes (duration)
     shortest_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
-    plot_map_dur = plot_congestion_heatmap_interactive(edges, shortest_routes_dur_df, offset_deg=0.000025)
+    plot_map_dur = plot_congestion_heatmap_interactive(edges, shortest_routes_dur_df, offset_deg=0.0000025)
     plot_map_dur.save("files/shortest_routes_dur_congestion_heatmap.html")
 
     # Step 12: Visualize congestion for shortest routes (distance)
     shortest_routes_dis_df = compute_shortest_routes(session, run_config.id, iteration_id, method="distance")
-    plot_map_dis = plot_congestion_heatmap_interactive(edges, shortest_routes_dis_df, offset_deg=0.000025)
+    plot_map_dis = plot_congestion_heatmap_interactive(edges, shortest_routes_dis_df, offset_deg=0.0000025)
     plot_map_dis.save("files/shortest_routes_dis_congestion_heatmap.html")
 
     session.close()

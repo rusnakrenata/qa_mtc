@@ -5,9 +5,9 @@ from datetime import datetime
 
 
 # Connection string
-db_user = "root"
-db_password = "Test1234"
-db_host = "77.93.155.81"
+db_user = "traffic_opti"
+db_password = "P4ssw0rd"
+db_host = "147.232.204.254"#"77.93.155.81"
 db_name = "trafficOptimization"
 
 #connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
