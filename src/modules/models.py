@@ -23,20 +23,13 @@ engine = create_engine(connection_url,
 # Test connection
 try:
     with engine.connect() as connection:
-        print("Connection to MariaDB successful!")
+        Base = declarative_base()
 except Exception as e:
     print(f"Error connecting to MariaDB: {e}")
 
 
 
-""" with engine.connect() as conn:    
-    conn.execute(text("DROP TABLE IF EXISTS nodes"))
-    conn.execute(text("DROP TABLE IF EXISTS edges")) """
-
 ####### --TABLES-- #######
-
-Base = declarative_base()
-
 
 class City(Base):
     __tablename__ = 'cities'
@@ -58,10 +51,6 @@ class Node(Base):
     osmid = Column(String(255))
     x = Column(Numeric(9,6))
     y = Column(Numeric(9,6))
-    #street_count = Column(Integer, nullable=True)
-    #highway = Column(String(255), nullable=True)
-    #railway = Column(String(255), nullable=True)
-    #junction = Column(String(255), nullable=True)    
     geometry = Column(String(255), nullable=True)  # Store as WKT or GeoJSON
     created_at = Column(DateTime, default= datetime.utcnow)
 
