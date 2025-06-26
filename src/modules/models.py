@@ -1,86 +1,64 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, Float, JSON, DateTime, BigInteger, Numeric, Boolean, desc, text, Numeric, Index, PrimaryKeyConstraint
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 
+# Import engine and config from db_config
+from db_config import engine
 
-# Connection string
-db_user = "traffic_opti"
-db_password = "P4ssw0rd"
-db_host = "147.232.204.254"#"77.93.155.81"
-db_name = "trafficOptimization"
-
-#connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
-connection_url = f"mysql+mysqldb://{db_user}:{db_password}@{db_host}/{db_name}"
-
-# Create SQLAlchemy engine
-engine = create_engine(connection_url,
-    pool_recycle=280,  # seconds (before wait_timeout)
-    pool_pre_ping=True  # check connection before using)
-)
-
-
-# Test connection
+# Test connection and create declarative base
 try:
     with engine.connect() as connection:
         Base = declarative_base()
 except Exception as e:
-    print(f"Error connecting to MariaDB: {e}")
-
-
+    logger.error(f"Error connecting to MariaDB: {e}")
 
 ####### --TABLES-- #######
 
 class City(Base):
+    """City table: stores city metadata."""
     __tablename__ = 'cities'
-    
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     node_count = Column(Integer)
     edge_count = Column(Integer)
-    created_at = Column(DateTime, default= datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    #run_configs = relationship("RunConfig", back_populates="city")
-
-# ---------- Node Model ----------
 class Node(Base):
+    """Node table: stores graph nodes."""
     __tablename__ = 'nodes'
-    
     id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
     osmid = Column(String(255))
     x = Column(Numeric(9,6))
     y = Column(Numeric(9,6))
     geometry = Column(String(255), nullable=True)  # Store as WKT or GeoJSON
-    created_at = Column(DateTime, default= datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-# ---------- Edge Model ----------
 class Edge(Base):
+    """Edge table: stores graph edges."""
     __tablename__ = 'edges'
-    
     id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
-    #osmid = Column(Integer, nullable=False, unique=True)
-    # Removed u, v columns, no longer representing nodes
     u = Column(String(255))
     v = Column(String(255))
     length = Column(String(255), nullable=True)
     geometry = Column(String(10000), nullable=True)  # Store as GeoJSON or WKT format for simplicity
-    created_at = Column(DateTime, default= datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Iteration(Base):
+    """Iteration table: stores simulation iterations."""
     __tablename__ = 'iterations'
-
     id = Column(Integer, primary_key=True)
     iteration_id = Column(Integer, nullable=False)
     run_configs_id = Column(Integer)  # Link to RunConfig
-    created_at = Column(DateTime, default= datetime.utcnow)
-
-    #city = relationship("City", back_populates="iterations")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class RunConfig(Base):
+    """RunConfig table: stores simulation configuration."""
     __tablename__ = 'run_configs'
-
     id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
     n_cars = Column(Integer)
@@ -89,52 +67,42 @@ class RunConfig(Base):
     max_length = Column(Integer)
     time_step = Column(Integer, nullable=False)
     time_window = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default= datetime.utcnow)
-
-    #city = relationship("City", back_populates="run_configs")
-    
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Vehicle(Base):
+    """Vehicle table: stores vehicle metadata."""
     __tablename__ = 'vehicles'
-
     id = Column(Integer, primary_key=True)
     vehicle_id = Column(BigInteger, nullable=False) 
     run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig
     iteration_id = Column(Integer, nullable=False) 
-    origin_edge_id = Column(Integer, nullable=False)#, related_name='origin_edge')
+    origin_edge_id = Column(Integer, nullable=False)
     origin_position_on_edge = Column(Float)
     origin_geometry = Column(String(255), nullable=True)
-    destination_edge_id = Column(Integer, nullable=False)#, related_name='destination_edge')
+    destination_edge_id = Column(Integer, nullable=False)
     destination_position_on_edge = Column(Float)
     destination_geometry = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default= datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    #run_configs = relationship("RunConfig", back_populates="vehicles")
-    
 class VehicleRoute(Base):
+    """VehicleRoute table: stores route alternatives for each vehicle."""
     __tablename__ = 'vehicle_routes'
-
-    #id = Column(Integer, autoincrement=True, nullable=False)
-    vehicle_id = Column(Integer, nullable=False) #ForeignKey('vehicles.id'),
-    run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig ForeignKey('run_configs.id'),
+    vehicle_id = Column(Integer, nullable=False)
+    run_configs_id = Column(Integer,  nullable=False)
     iteration_id = Column(Integer, nullable=False) 
     route_id = Column(Integer, nullable=False) 
     duration = Column(Integer)
     distance = Column(Integer)
     duration_in_traffic = Column(Integer)
-    created_at = Column(DateTime, default= datetime.utcnow)
-
+    created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (
         PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
         Index('idx_run_iter_vehicle_method', 'run_configs_id', 'iteration_id', 'vehicle_id')
     )
 
-
-    
 class RoutePoint(Base):
+    """RoutePoint table: stores points along each vehicle route."""
     __tablename__ = 'route_points'
-
-    #id = Column(Integer, autoincrement=True, nullable=False)
     vehicle_id = Column(Integer, nullable=False)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
@@ -147,20 +115,16 @@ class RoutePoint(Base):
     lon = Column(Numeric(9, 6))
     time = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
-
     __table_args__ = (
-        # Composite Primary Key - OK as-is, used for uniqueness and integrity
         PrimaryKeyConstraint(
             'run_configs_id', 'iteration_id', 
             'edge_id', 'vehicle_id', 'route_id', 'point_id', 'time' ),
         Index('edge_id', 'time', 'cardinal', 'vehicle_id','lat','lon')
-
     )
-    
 
 class CongestionMap(Base):
+    """CongestionMap table: stores pairwise congestion scores."""
     __tablename__ = 'congestion_map'
-
     id = Column(Integer, primary_key=True)
     run_configs_id = Column(Integer,  nullable=False)
     iteration_id = Column(Integer, nullable=False)
@@ -172,10 +136,9 @@ class CongestionMap(Base):
     congestion_score = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-
 class QAResult(Base):
+    """QAResult table: stores results of QUBO/QA optimization runs."""
     __tablename__ = 'qa_results'
-
     id = Column(Integer, primary_key=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
@@ -184,18 +147,36 @@ class QAResult(Base):
     comp_type = Column(String(50))
     num_reads = Column(Integer)
     n_vehicles = Column(Integer)
-    k_alternattives = Column(Integer)  # follows your return dict spelling
-    weights = Column(JSON)             # serialized congestion weight matrix
-    vehicle_ids = Column(JSON)         # list of filtered vehicle IDs
-    assignment_valid = Column(Integer) # 1 or 0
-    assignment = Column(JSON)          # route assignments for each vehicle
+    k_alternattives = Column(Integer)
+    weights = Column(JSON)
+    vehicle_ids = Column(JSON)
+    assignment_valid = Column(Integer)
+    assignment = Column(JSON)
     energy = Column(Float)
     duration = Column(Float)
     qubo_path = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
-    
 
-    
-####### --TABLES-- #######
-
+# Create all tables if they do not exist
 Base.metadata.create_all(engine)
+
+"""
+Database models for the traffic optimization system.
+
+Schema overview:
+- City, Node, Edge: Graph structure of the city
+- RunConfig, Iteration: Simulation configuration and runs
+- Vehicle, VehicleRoute, RoutePoint: Vehicles and their possible routes
+- CongestionMap: Pairwise congestion scores between vehicles/routes
+- QAResult: Results of QUBO/QA optimization
+
+Usage:
+- Import models and Base for ORM operations
+- Use `from db_config import get_session` for session management
+- Always use context managers (with statements) for sessions to ensure proper cleanup
+
+Example:
+    from db_config import get_session
+    with get_session() as session:
+        ... # ORM operations
+"""
