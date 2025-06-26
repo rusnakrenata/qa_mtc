@@ -1,23 +1,45 @@
 import pandas as pd
 import numpy as np
+import logging
+from typing import List, Any, Optional, Tuple
 
-def select_dense_vehicle_subset(w, vehicle_ids, num_selected):
+logger = logging.getLogger(__name__)
+
+
+def select_top_congested_vehicles(w: np.ndarray, vehicle_ids: List[Any], num_selected: int) -> List[Any]:
+    """
+    Fast selection: Select vehicles with the highest total congestion score.
+    Args:
+        w: 4D numpy array of shape (n, n, t, t) with congestion weights.
+        vehicle_ids: List of vehicle IDs.
+        num_selected: Number of vehicles to select.
+    Returns:
+        List of selected vehicle IDs.
+    """
+    n = len(vehicle_ids)
+    # Sum over all other vehicles and all route pairs
+    total_scores = np.sum(w, axis=(1,2,3))  # shape: (n,)
+    top_indices = np.argpartition(-total_scores, num_selected)[:num_selected]
+    selected = sorted(top_indices.tolist())
+    return [vehicle_ids[i] for i in selected]
+
+
+def select_dense_vehicle_subset(w: np.ndarray, vehicle_ids: List[Any], num_selected: int) -> List[Any]:
+    """
+    (Legacy, slow) Greedy selection of densest subset based on pairwise interactions.
+    Only use for small n.
+    """
     n = len(vehicle_ids)
     t = len(w[0][0])
     interaction_matrix = np.zeros((n, n))
-
     for i in range(n):
         for j in range(n):
             if i == j:
                 continue
-            interaction_matrix[i, j] = sum(
-                w[i][j][k1][k2] for k1 in range(t) for k2 in range(t)
-            )
-
+            interaction_matrix[i, j] = np.sum(w[i][j])
     scores = interaction_matrix.sum(axis=1)
     selected = [int(np.argmax(scores))]
     remaining = set(range(n)) - set(selected)
-
     while len(selected) < num_selected and remaining:
         best_candidate = None
         best_score = -1
@@ -26,98 +48,38 @@ def select_dense_vehicle_subset(w, vehicle_ids, num_selected):
             if density > best_score:
                 best_score = density
                 best_candidate = r
-        selected.append(best_candidate)
-        remaining.remove(best_candidate)
-
+        if best_candidate is not None:
+            selected.append(best_candidate)
+            remaining.remove(best_candidate)
     selected.sort()
     return [vehicle_ids[i] for i in selected]
 
 
-def filter_routes_for_qubo(
-    t, vehicle_ids, w,
-    filtering_percentage=0.10,
-    max_qubo_size=None
-):
+def filter_vehicles_by_congested_edges_and_limit(
+    congestion_df: pd.DataFrame,
+    max_vehicles: int
+) -> List[Any]:
     """
-    Filters vehicle routes for QUBO using percentage-based selection
-    and optional upper bound on QUBO size.
-
-    Parameters:
-    - congestion_df: unused, placeholder for future enhancements
-    - t: number of route alternatives per vehicle
-    - vehicle_ids: full list of vehicle IDs
-    - w: 4D congestion weight matrix
-    - filtering_percentage: proportion of vehicles to keep (e.g., 0.1 for 10%)
-    - max_qubo_size: optional hard cap on number of QUBO variables
-
+    Select up to max_vehicles that contribute to the most congested edges.
     Returns:
-    - List of selected vehicle IDs
+        filtered_vehicle_ids: List of selected vehicle IDs (in QUBO order)
     """
-    vehicle_count = len(vehicle_ids)
-    max_vehicles = int(vehicle_count * filtering_percentage)
+    edge_scores = congestion_df.groupby('edge_id')['congestion_score'].sum()
+    edge_scores = pd.Series(edge_scores)
+    sorted_edges = edge_scores.sort_values(ascending=False).index.tolist()  # type: ignore
+    selected_vehicles = []
+    selected_set = set()
+    for edge_id in sorted_edges:
+        edge_rows = congestion_df[congestion_df['edge_id'] == edge_id]
+        vehicles = set(edge_rows['vehicle1']).union(set(edge_rows['vehicle2']))
+        for v in vehicles:
+            if v not in selected_set and len(selected_vehicles) < max_vehicles:
+                selected_vehicles.append(v)
+                selected_set.add(v)
+            if len(selected_vehicles) >= max_vehicles:
+                break
+        if len(selected_vehicles) >= max_vehicles:
+            break
+    logger.info(f"Selected {len(selected_vehicles)} vehicles for QUBO.")
+    return selected_vehicles
 
-    if max_qubo_size is not None:
-        max_vehicles = min(max_vehicles, max_qubo_size // t)
-
-    if max_vehicles == 0:
-        raise ValueError("Too few vehicles selected. Adjust filtering_percentage or max_qubo_size.")
-
-    print(f"Selecting up to {max_vehicles} vehicles from {vehicle_count} ({100 * filtering_percentage:.1f}%)")
-    return select_dense_vehicle_subset(w, vehicle_ids, max_vehicles)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import pandas as pd
-
-# def filter_routes_for_qubo(congestion_df, threshold_percentile=0.9):
-#     """
-#     Filters vehicle IDs that contribute most to congestion based on pairwise interactions.
-#     Each congestion score is divided by 2 to split the contribution equally between the two vehicles.
-
-#     Parameters:
-#         congestion_df: DataFrame with columns [vehicle1, vehicle2, congestion_score]
-#         threshold_percentile: Percentile threshold (e.g., 0.9 for top 10%)
-
-#     Returns:
-#         List of filtered vehicle IDs
-#     """
-#     # Divide score equally between both vehicles
-#     v1_scores = congestion_df[['vehicle1', 'congestion_score']].copy()
-#     v1_scores['congestion_score'] /= 2
-#     v1_scores = v1_scores.rename(columns={'vehicle1': 'vehicle_id'})
-
-#     v2_scores = congestion_df[['vehicle2', 'congestion_score']].copy()
-#     v2_scores['congestion_score'] /= 2
-#     v2_scores = v2_scores.rename(columns={'vehicle2': 'vehicle_id'})
-
-#     all_scores = pd.concat([v1_scores, v2_scores], axis=0)
-
-#     # Sum all congestion scores per vehicle
-#     vehicle_scores = all_scores.groupby('vehicle_id')['congestion_score'].sum().reset_index()
-
-#     # Compute threshold
-#     threshold_value = vehicle_scores['congestion_score'].quantile(threshold_percentile)
-
-#     # Filter vehicle IDs above the threshold
-#     filtered_vehicles = vehicle_scores[
-#         vehicle_scores['congestion_score'] >= threshold_value
-#     ]['vehicle_id'].tolist()
-
-#     print(f"Threshold ({threshold_percentile:.2%}): {threshold_value:.6f}")
-#     print(f"Filtered vehicles ({len(filtered_vehicles)} total): {filtered_vehicles}")
-
-#     return filtered_vehicles

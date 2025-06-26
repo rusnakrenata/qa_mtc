@@ -1,41 +1,45 @@
 from sqlalchemy import create_engine, MetaData, text
+import logging
 
-# Connection config
-db_user = "traffic_opti"
-db_password = "P4ssw0rd"
-db_host = "147.232.204.254"#"77.93.155.81"
-db_name = "trafficOptimization"
+logger = logging.getLogger(__name__)
 
-connection_url = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
+# Import engine from db_config
+from db_config import engine
 
-# Create engine
-engine = create_engine(
-    connection_url,
-    pool_recycle=280,
-    pool_pre_ping=True
-)
 
-# Drop all tables
-def drop_all_tables():
+def drop_all_tables() -> None:
+    """
+    Drops all tables in the connected MariaDB database for the traffic optimization system.
+
+    Usage:
+    - This script disables foreign key checks, drops all tables, then re-enables checks.
+    - Use with caution! This will delete all data and schema.
+    - Always use context managers (with statements) for DB connections to ensure proper cleanup.
+
+    Example:
+        from db_config import get_session
+        with get_session() as session:
+            ... # ORM operations
+    """
     try:
         with engine.connect() as conn:
-            print("Connected. Disabling foreign key checks...")
+            logger.info("Connected. Disabling foreign key checks...")
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
 
             meta = MetaData()
             meta.reflect(bind=engine)
 
-            print(f"Dropping {len(meta.tables)} tables...")
+            logger.info(f"Dropping {len(meta.tables)} tables...")
             for table in meta.sorted_tables:
-                print(f"Dropping table {table.name}...")
+                logger.info(f"Dropping table {table.name}...")
                 conn.execute(text(f"DROP TABLE IF EXISTS `{table.name}`"))
 
-            print("Re-enabling foreign key checks...")
+            logger.info("Re-enabling foreign key checks...")
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
-            print("✅ All tables dropped successfully.")
+            logger.info("All tables dropped successfully.")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"Error: {e}", exc_info=True)
 
 if __name__ == "__main__":
     drop_all_tables()

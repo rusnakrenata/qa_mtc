@@ -13,54 +13,48 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import osmnx as ox
 import datetime
+import logging
+from typing import Any, List, Tuple, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
-
-
-def get_point_at_percentage(line_wkt, percentage):
+def get_point_at_percentage(line_wkt: str, percentage: float) -> Tuple[float, float]:
+    """Get the point at a given percentage along a linestring."""
     line = LineString([(21.2159377, 48.7126189), (21.2159939, 48.7125398), (21.2162822, 48.7121463)])
     total_length = line.length
     target_length = total_length * percentage
     point_at_percentage = line.interpolate(target_length)
     return point_at_percentage.x, point_at_percentage.y
 
-def create_geodataframe_from_coords(coords):
+
+def create_geodataframe_from_coords(coords: List[Dict[str, float]]) -> gpd.GeoDataFrame:
+    """Create a GeoDataFrame from a list of coordinate dicts."""
     points = [Point(coord['lng'], coord['lat']) for coord in coords]
     gdf = gpd.GeoDataFrame(geometry=points)
     gdf.set_crs("EPSG:4326", allow_override=True, inplace=True)
     return gdf
 
-def create_linestring_from_polyline(polyline_points):
+
+def create_linestring_from_polyline(polyline_points: List[Tuple[float, float]]) -> gpd.GeoDataFrame:
+    """Create a GeoDataFrame with a single LineString from polyline points."""
     line = LineString(polyline_points)
     gdf = gpd.GeoDataFrame(geometry=[line])
     gdf.set_crs("EPSG:4326", allow_override=True, inplace=True)
     return gdf
 
-def get_point_on_line(line, percentage):
+
+def get_point_on_line(line: LineString, percentage: float) -> Point:
+    """Get a point at a given percentage along a LineString."""
     if not 0 <= percentage <= 1:
         raise ValueError("Percentage must be between 0 and 1.")
     total_length = line.length
     target_distance = total_length * percentage
     return line.interpolate(target_distance)
 
-# def get_routes_from_google(origin, destination, api_key, max_nr_of_alternative_routes):
-#     base_url = "https://maps.googleapis.com/maps/api/directions/json"
-#     params = {
-#         "origin": f"{origin[0]},{origin[1]}",
-#         "destination": f"{destination[0]},{destination[1]}",
-#         "mode": "driving",
-#         "alternatives": "true",
-#         "departure_time": "now",
-#         "key": api_key
-#     }
-#     response = requests.get(base_url, params=params)
-#     if response.status_code == 200:
-#         return response.json().get("routes", [])[:max_nr_of_alternative_routes]
-#     else:
-#         print(response.text)
-#         return None
 
-def calculate_initial_bearing(start_lat, start_lng, end_lat, end_lng):
+def calculate_initial_bearing(start_lat: float, start_lng: float, end_lat: float, end_lng: float) -> float:
+    """Calculate the initial bearing from start to end coordinates."""
     lat1 = math.radians(start_lat)
     lat2 = math.radians(end_lat)
     diff_long = math.radians(end_lng - start_lng)
@@ -69,20 +63,21 @@ def calculate_initial_bearing(start_lat, start_lng, end_lat, end_lng):
     initial_bearing = math.atan2(x, y)
     return (math.degrees(initial_bearing) + 360) % 360
 
-def bearing_to_cardinal(bearing):
+
+def bearing_to_cardinal(bearing: float) -> str:
+    """Convert a bearing in degrees to a cardinal direction."""
     directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     ix = round(bearing / 45) % 8
     return directions[ix]
 
-def find_closest_osm_edge_2(lat, lng, edge_tree, transformer=None, geometry_to_id=None):
+
+def find_closest_osm_edge_2(lat: float, lng: float, edge_tree: Any, transformer: Optional[Any] = None, geometry_to_id: Optional[Dict[Any, Any]] = None) -> Dict[str, Any]:
+    """Find the closest OSM edge using a spatial index and transformer."""
     x, y = transformer.transform(lng, lat)
     point = Point(x, y)
-
     geometry, dist = edge_tree.query_nearest(point, return_distance=True)
-    # 🛠 FIX: If geometry is accidentally wrapped in a numpy array, extract it
     if isinstance(geometry, np.ndarray):
         geometry = geometry.item()
-
     edge_id = geometry_to_id.get(geometry, None)
     return {
         'id': edge_id,
@@ -90,21 +85,22 @@ def find_closest_osm_edge_2(lat, lng, edge_tree, transformer=None, geometry_to_i
         'distance_meters': dist
     }
 
-def find_closest_osm_edge(lat, lng, edges_gdf, edge_tree, transformer=None):
+
+def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, edge_tree: Any, transformer: Optional[Any] = None) -> Dict[str, Any]:
+    """Find the closest OSM edge using a GeoDataFrame and spatial index."""
     x, y = transformer.transform(lng, lat)
     point = Point(x, y)
-    #print(f"Finding closest edge for point: {point}")
-    #print(datetime.datetime.now())
     index = edge_tree.nearest(point)
-    #print(datetime.datetime.now())
     edge_row = edges_gdf.iloc[index]
     return {
         'id': edge_row.get('id', None),
         'geometry': edge_row.geometry,
-        'distance_meters': 0  # can add actual distance if needed
+        'distance_meters': 0
     }
 
-def find_approx_nearest_edge(lat, lng, edges_gdf_proj, kdtree, transformer):
+
+def find_approx_nearest_edge(lat: float, lng: float, edges_gdf_proj: gpd.GeoDataFrame, kdtree: Any, transformer: Any) -> Dict[str, Any]:
+    """Find the nearest edge using a projected GeoDataFrame and KDTree."""
     x, y = transformer.transform(lng, lat)
     dist, idx = kdtree.query([x, y])
     edge_row = edges_gdf_proj.iloc[idx]
@@ -114,26 +110,27 @@ def find_approx_nearest_edge(lat, lng, edges_gdf_proj, kdtree, transformer):
         'distance_meters': dist
     }
 
-def animate_vehicles(G, vehicle_paths, interval=10):
+
+def animate_vehicles(G: Any, vehicle_paths: List[Dict[str, Any]], interval: int = 10) -> None:
+    """Animate vehicle paths on a networkx graph using matplotlib."""
     fig, ax = ox.plot_graph(G, node_color='black', node_size=5, edge_linewidth=0.5, bgcolor='white', show=False, close=False, ax=None)
     scatters = [ax.scatter(path['path'][0][0], path['path'][0][1], c='red', s=20, label=f"Vehicle {path['id']}") for path in vehicle_paths]
-
     def update(frame):
         for idx, vehicle in enumerate(vehicle_paths):
             if frame < len(vehicle['path']):
                 scatters[idx].set_offsets(vehicle['path'][frame])
         return scatters
-
     total_frames = max(len(v['path']) for v in vehicle_paths)
     ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=interval * 1000, blit=True, repeat=False)
     plt.legend()
     plt.show()
 
-def compute_spatial_density_with_speed(df, dist_thresh=10, speed_diff_thresh=2):
+
+def compute_spatial_density_with_speed(df: pd.DataFrame, dist_thresh: float = 10, speed_diff_thresh: float = 2) -> pd.DataFrame:
+    """Compute spatial density and congestion for each edge/time/cardinal group."""
     gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['lon'], df['lat']), crs='EPSG:4326').to_crs(epsg=3857)
     results = []
     grouped = gdf.groupby(['time', 'edge_id', 'cardinal'])
-
     for (time, edge_id, cardinal), group in grouped:
         if len(group) < 2:
             results.append({
@@ -146,16 +143,13 @@ def compute_spatial_density_with_speed(df, dist_thresh=10, speed_diff_thresh=2):
                 'avg_pairwise_distance': None
             })
             continue
-
         coords = np.array([(geom.x, geom.y) for geom in group.geometry])
         speeds = np.array(group['speed'])
         vehicle_ids = np.array(group['vehicle_id'])
-
         dist_matrix = squareform(pdist(coords))
         speed_matrix = squareform(pdist(speeds[:, None]))
         valid_mask = ~np.equal.outer(vehicle_ids, vehicle_ids) & np.triu(np.ones_like(dist_matrix, dtype=bool), k=1)
         congested_mask = (dist_matrix < dist_thresh) & (speed_matrix < speed_diff_thresh) & valid_mask
-
         results.append({
             'time': time,
             'edge_id': edge_id,
@@ -165,8 +159,8 @@ def compute_spatial_density_with_speed(df, dist_thresh=10, speed_diff_thresh=2):
             'avg_speed': speeds.mean(),
             'avg_pairwise_distance': dist_matrix[valid_mask].mean() if valid_mask.any() else None
         })
-
     return pd.DataFrame(results)
+
 
 def normalize_valhalla_route(route, route_index=0):
     if "summary" not in route:
@@ -178,6 +172,7 @@ def normalize_valhalla_route(route, route_index=0):
         "distance_km": route.get("summary", {}).get("length"),
         "duration_sec": route.get("summary", {}).get("time"),
     }
+
 
 async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of_alternative_routes):
 
@@ -200,6 +195,7 @@ async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of
         else:
             print(f"Error: {response.status} - {await response.text()}")
             return None
+
 
 def convert_valhalla_leg_to_google_like_steps(leg):
     full_coords = polyline.decode(leg['shape'], precision=6)
@@ -228,6 +224,7 @@ def build_edge_indices(edges_gdf):
     # Map geometry back to index in edges_gdf
     geom_to_index = {geom: idx for idx, geom in enumerate(edge_geoms)}
     return ckdtree, strtree, geom_to_index, centroid_coords
+
 
 def find_nearest_edge_hybrid(lat, lng, transformer, edges_gdf,
                               ckdtree, strtree, geom_to_index,

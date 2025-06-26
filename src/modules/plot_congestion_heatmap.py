@@ -4,15 +4,32 @@ import branca.colormap as cm
 from branca.colormap import LinearColormap, linear
 from shapely.geometry import LineString
 import geopandas as gpd
+import logging
+from typing import Optional
+import pandas as pd
 
-def plot_congestion_heatmap_interactive(edges_gdf, congestion_df, offset_deg=0.00005):
+logger = logging.getLogger(__name__)
+
+def plot_congestion_heatmap_interactive(
+    edges_gdf: gpd.GeoDataFrame,
+    congestion_df: Optional[pd.DataFrame],
+    offset_deg: float = 0.00005
+) -> Optional[folium.Map]:
     """
     Plot interactive congestion heatmap using Folium with green-to-red color scale and tooltips.
     Aggregates congestion score per edge_id before merging.
+
+    Args:
+        edges_gdf: GeoDataFrame of road network edges with geometry.
+        congestion_df: DataFrame with columns ['edge_id', 'congestion_score'].
+        offset_deg: Offset for parallel lines in degrees.
+
+    Returns:
+        Folium Map object or None if no data.
     """
     if congestion_df is None or congestion_df.empty:
-        print("No congestion map data to plot.")
-        return
+        logger.warning("No congestion map data to plot.")
+        return None
 
     # Aggregate congestion scores by edge_id
     congestion_agg = congestion_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
@@ -43,16 +60,13 @@ def plot_congestion_heatmap_interactive(edges_gdf, congestion_df, offset_deg=0.0
         geom = row.geometry
         if geom is None or geom.is_empty or geom.length == 0:
             continue
-
         coords = list(geom.coords)
         x0, y0 = coords[0]
         x1, y1 = coords[-1]
         side = 'left' if ((y1 < y0) and (x1 < x0)) or ((y1 > y0) and (x1 > x0)) else 'right'
-
         try:
             offset_geom = geom.parallel_offset(offset_deg, side=side, join_style=2)
             lines = [offset_geom] if isinstance(offset_geom, LineString) else list(offset_geom.geoms)
-
             for line in lines:
                 coords = [(lat, lon) for lon, lat in line.coords]
                 folium.PolyLine(
@@ -63,31 +77,31 @@ def plot_congestion_heatmap_interactive(edges_gdf, congestion_df, offset_deg=0.0
                     tooltip=f"Edge ID: {row['id']}<br>Score: {row['congestion_score']:.2f}"
                 ).add_to(m)
         except Exception as e:
-            print(f"Skipping edge {row['id']} due to offset error: {e}")
-
+            logger.warning(f"Skipping edge {row['id']} due to offset error: {e}")
     return m
 
 
-
-
-def plot_congestion_heatmap(edges_gdf, congestion_df, cmap='Reds', figsize=(12, 12)):
+def plot_congestion_heatmap(
+    edges_gdf: gpd.GeoDataFrame,
+    congestion_df: Optional[pd.DataFrame],
+    cmap: str = 'Reds',
+    figsize: tuple = (12, 12)
+) -> None:
     """
     Aggregates congestion data over edges and plots a heatmap.
 
-    Parameters:
-    - edges_gdf: GeoDataFrame containing road network edges with geometry.
-    - congestion_df: DataFrame containing edge_id and congestion_score.
-    - cmap: Color map used for the heatmap (default: 'Reds').
-    - figsize: Tuple defining the size of the plot (default: (12, 12)).
+    Args:
+        edges_gdf: GeoDataFrame containing road network edges with geometry.
+        congestion_df: DataFrame containing edge_id and congestion_score.
+        cmap: Color map used for the heatmap (default: 'Reds').
+        figsize: Tuple defining the size of the plot (default: (12, 12)).
     """
     if congestion_df is None or congestion_df.empty:
-        print("No congestion map data to plot.")
+        logger.warning("No congestion map data to plot.")
         return
-
     # Merge and clean
     merged_gdf = edges_gdf.merge(congestion_df, left_on='id', right_on='edge_id', how='left')
     merged_gdf['congestion_score'] = merged_gdf['congestion_score'].fillna(0)
-
     # Plot
     fig, ax = plt.subplots(figsize=figsize)
     merged_gdf.plot(
