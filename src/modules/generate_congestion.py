@@ -106,10 +106,10 @@ def generate_congestion(
                     results.append(result)
         if not results:
             logger.warning("No congestion pairs detected.")
-            return pd.DataFrame(columns=[
+            return pd.DataFrame(columns=pd.Index([
                 'edge_id', 'vehicle1', 'vehicle1_route',
                 'vehicle2', 'vehicle2_route', 'congestion_score'
-            ])
+            ]))
         logger.info("Aggregating results and preparing insert at: %s", datetime.now())
         all_congestion = pd.concat(results, ignore_index=True)
         grouped = all_congestion.groupby(
@@ -144,10 +144,10 @@ def generate_congestion(
         return grouped
     except Exception as e:
         logger.error(f"Error in generate_congestion: {e}", exc_info=True)
-        return pd.DataFrame(columns=[
+        return pd.DataFrame(columns=pd.Index([
             'edge_id', 'vehicle1', 'vehicle1_route',
             'vehicle2', 'vehicle2_route', 'congestion_score'
-        ])
+        ]))
 
 
 
