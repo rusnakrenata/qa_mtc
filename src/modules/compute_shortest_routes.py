@@ -63,9 +63,9 @@ def compute_shortest_routes(
             'run_config_id': run_config_id,
             'iteration_id': iteration_id
         })
-        df = pd.DataFrame(result.fetchall(), columns=["edge_id", "congestion_score"])
+        df = pd.DataFrame(result.fetchall(), columns=pd.Index(["edge_id", "congestion_score"]))
         logger.info(f"Computed shortest routes ({method}) for run_config_id={run_config_id}, iteration_id={iteration_id}.")
         return df
     except Exception as e:
         logger.error(f"Error computing shortest routes: {e}", exc_info=True)
-        return pd.DataFrame(columns=["edge_id", "congestion_score"])
+        return pd.DataFrame(columns=pd.Index(["edge_id", "congestion_score"]))

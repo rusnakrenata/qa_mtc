@@ -41,19 +41,32 @@ python src/modules/main.py
 ## Workflow
 
 1. **City Graph Extraction:**
-   - Downloads or loads the city road network using OpenStreetMap and Google Maps APIs.
+   - Downloads or loads the city road network using OpenStreetMap and Valhalla APIs.
 2. **Vehicle Generation:**
    - Simulates thousands of vehicles and generates alternative routes for each.
-3. **Congestion Calculation:**
-   - Computes pairwise congestion scores for all vehicle-route pairs.
-4. **QUBO Matrix Construction:**
-   - Builds a QUBO matrix encoding congestion and assignment constraints.
-5. **Filtering:**
+3. **Route Generation (Valhalla):**
+   - Generates multiple alternative routes per vehicle using the Valhalla routing engine.
+4. **Congestion Calculation:**
+   - Computes pairwise congestion scores for all vehicle-route pairs based on spatiotemporal overlap.
+5. **QUBO Matrix Construction:**
+   - Builds a QUBO matrix encoding congestion and assignment constraints using 4D weights.
+6. **Vehicle Filtering for QUBO:**
    - Selects a subset of vehicles for tractable optimization (default: top congestion scores).
-6. **Visualization:**
+7. **QUBO/QA Optimization:**
+   - Solves the QUBO using quantum (D-Wave) or classical solvers (`qa_testing.py`).
+8. **Assignment Extraction:**
+   - Extracts the optimal or near-optimal assignment from the QUBO/QA solution.
+9. **Post-QA Congestion Analysis:**
+   - Recomputes congestion based on the optimized assignment and baseline heuristics for non-optimized vehicles.
+10. **Visualization:**
    - Generates interactive heatmaps of congestion for different routing strategies.
-7. **Optimization (optional):**
-   - QUBO matrix can be solved using quantum or classical solvers (see `qa_testing.py`).
+
+**Workflow Diagram (textual):**
+```
+[City Graph] → [Vehicles] → [Routes] → [Congestion] → [QUBO Matrix]
+      ↓                                         ↑
+[Filtering] → [QUBO/QA Optimization] → [Assignment] → [Post-QA Congestion] → [Visualization]
+```
 
 ---
 
@@ -91,7 +104,7 @@ qa_mtc/
 
 ## 1. Introduction
 
-Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined trases (routes), such that each car selects exactly one trase, while minimizing overall congestion caused by multiple cars sharing the same trase. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
+Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
 
 ---
 
@@ -99,18 +112,18 @@ Efficient traffic management is essential to minimizing congestion in modern tra
 
 We are given:
 
-- `n` cars, indexed `i = 0, ..., n - 1`
-- `t` trases (routes), indexed `k = 0, ..., t - 1`
+- `n` vehicles, indexed `i = 0, ..., n - 1`
+- `t` routes (alternatives), indexed `k = 0, ..., t - 1`
 - Binary decision variables `x_i^k ∈ {0, 1}`, where:
-  - `x_i^k = 1` if car `i` is assigned to trase `k`
+  - `x_i^k = 1` if vehicle `i` is assigned to route `k`
   - `x_i^k = 0` otherwise
 
 **Assignment constraint:**  
-Each car must be assigned to exactly one trase:
+Each vehicle must be assigned to exactly one route:
 
     ∑_{k=0}^{t-1} x_i^k = 1    for all i
 
-We also define a congestion cost `w(i, j, k)`, representing the penalty if both cars `i` and `j` are assigned to the same trase `k`.
+We also define a congestion cost `w[i][j][k1][k2]`, representing the penalty if vehicle `i` is assigned to route `k1` and vehicle `j` to route `k2`.
 
 ---
 
@@ -118,15 +131,15 @@ We also define a congestion cost `w(i, j, k)`, representing the penalty if both 
 
 The total congestion cost is modeled as a quadratic function over the binary variables:
 
-    f(x) = ∑_{k=0}^{t-1} ∑_{0 ≤ i < j < n} w(i, j, k) · x_i^k · x_j^k
+    f(x) = ∑_{i=0}^{n-1} ∑_{j=0}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2}
 
-This function penalizes combinations of cars assigned to the same congested trase, encouraging distribution across less crowded paths.
+This function penalizes combinations of vehicles assigned to congested route pairs, encouraging distribution across less crowded paths.
 
 ---
 
 ## 4. Constraint Enforcement via Penalty Term
 
-To enforce that each car takes exactly one trase, we use a penalty function:
+To enforce that each vehicle is assigned exactly one route, we use a penalty function:
 
     P(x) = λ · ∑_{i=0}^{n-1} ( ∑_{k=0}^{t-1} x_i^k - 1 )²
 
@@ -142,61 +155,32 @@ The total function to minimize becomes:
 
 This is a fully quadratic, unconstrained objective suitable for QUBO solvers such as those provided by D-Wave.
 
+---
 
 ## 6. Variable Flattening and Index Mapping
 
-To express the problem in a QUBO matrix form, we flattened the `x_i^k` variables into a 1D binary vector `x_q` using:
+To express the problem in a QUBO matrix form, we flatten the `x_i^k` variables into a 1D binary vector `x_q` using:
 
     q = i · t + k
 
-Each car-trase pair `(i, k)` is assigned a unique index `q ∈ {0, 1, ..., n·t - 1}`.  
+Each vehicle-route pair `(i, k)` is assigned a unique index `q ∈ {0, 1, ..., n·t - 1}`.  
 The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
 
     F(x) = xᵀ · Q · x
 
+---
 
 ## 7. Algorithm: QUBO Matrix Construction
 
-```
-# Inputs:
-# n = number of cars
-# t = number of trases
-# w[i][j][k] = congestion weight for cars i and j on trase k
-# lambda_penalty = penalty coefficient
+- **Step 1:** Filter vehicles for QUBO (e.g., by congestion impact).
+- **Step 2:** Compute or normalize congestion weights `w[i][j][k1][k2]` for the filtered set.
+- **Step 3:** For all pairs `(i, j)` and route pairs `(k1, k2)`, set QUBO matrix entries:
+    - `Q[(q1, q2)] += w[i][j][k1][k2]` for off-diagonal terms.
+- **Step 4:** For each vehicle, add assignment constraint terms:
+    - `Q[(q, q)] += λ · (1 - 2)` for linear terms.
+    - `Q[(q1, q2)] += 2λ` for all pairs of routes for the same vehicle.
 
-# Step 0: Compute congestion weights `w[i][j][k]`:
-
-    - Use **OpenStreetMap** (via the `osmnx` Python library) to download the city road network graph `G_city`
-    - Generate `n` car origin-destination (OD) pairs randomly within the graph boundary
-    - For each car `i`, use the **Google Maps Directions API** to obtain `k = 3` alternative routes for the same OD pair
-    - For each pair of cars `(i, j)` and each route index `k`, compute `w[i][j][k]` as:
-
-        `w[i][j][k] = number of shared road segments (edges) between x_i^k and x_j^k`
-
-    - This captures how much overlap (congestion potential) exists if both cars take the same route index `k`
-
-# Step 1: Initialize Q as an empty dictionary
-
-# Step 2: Congestion penalty (encourage cars to avoid same congested trase)
-    for k in range(t):
-        for i, j in combinations(range(n), 2):
-            q1 = i * t + k
-            q2 = j * t + k
-            Q[(q1, q2)] += w[i][j][k]
-
-# Step 8: Assignment constraint (each car must take exactly one trase)
-    for i in range(n):
-        # Linear terms from expanding (sum_k x_i^k - 1)^2
-        for k in range(t):
-            q = i * t + k
-            Q[(q, q)] += lambda_penalty * (1 - 2)  # x^2 - 2x → +1 -2 in the expansion
-
-        # Quadratic terms from x_i^k1 * x_i^k2
-        for k1, k2 in combinations(range(t), 2):
-            q1 = i * t + k1
-            q2 = i * t + k2
-            Q[(q1, q2)] += 2 * lambda_penalty
-```
+---
 
 ## 8. Complexity Analysis
 
@@ -222,17 +206,19 @@ from dimod import BinaryQuadraticModel
 bqm = BinaryQuadraticModel.from_qubo(Q)
 ```
 
+---
+
 ## 10. Novelty and Contribution
 
 Existing systems such as Google Maps and Waze perform real-time routing based on individual travel time optimization. While effective for user-level navigation, these systems do not coordinate across multiple vehicles, which can lead to **unintended congestion** as many users are directed to the same route.
 
 Classical transportation planning tools (e.g., VISUM, TransCAD) optimize traffic assignments using equilibrium models but are primarily designed for **long-term forecasting** rather than **real-time, dynamic allocation**.
 
-In contrast, our approach formulates the **car-to-trase assignment problem** as a **Quadratic Unconstrained Binary Optimization (QUBO)** problem. The key novelties of our method include:
+In contrast, our approach formulates the **vehicle-to-route assignment problem** as a **Quadratic Unconstrained Binary Optimization (QUBO)** problem. The key novelties of our method include:
 
 - **Coordinated vehicle routing** using a global objective function
-- **Congestion-aware modeling** via pairwise weights `w(i, j, k)` that penalize cars assigned to the same trase
-- **Constraint enforcement** through penalty terms that guarantee each car is assigned exactly one trase
+- **Congestion-aware modeling** via pairwise weights `w[i][j][k1][k2]` that penalize vehicles assigned to congested route pairs
+- **Constraint enforcement** through penalty terms that guarantee each vehicle is assigned exactly one route
 - Compatibility with **quantum annealing hardware** (e.g., D-Wave), allowing execution on specialized solvers for combinatorial optimization
 - Applicability to **multi-agent systems**, autonomous vehicle coordination, and real-time traffic distribution
 

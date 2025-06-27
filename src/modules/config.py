@@ -2,7 +2,7 @@
 
 # --- Simulation/City Parameters ---
 CITY_NAME = "Košice, Slovakia"
-N_VEHICLES = 250
+N_VEHICLES = 30000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 1000
 MAX_LENGTH = 10000
