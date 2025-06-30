@@ -8,6 +8,8 @@ venv/
 .env/
 src/cache
 src/__pycache__
+src/modules/cache
+src/modules/files
 
 # VS Code settings
 .vscode/
