@@ -21,7 +21,8 @@ def test_qubo_matrix_normalized():
     n, t = 4, 2
     vehicle_ids = list(range(n))
     weights_df = make_weights_df(n, t)
-    Q, filtered = qubo_matrix(n, t, weights_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.0, filtering_percentage=0.5)
+    congestion_df = pd.DataFrame(columns=pd.Index(['edge_id', 'congestion_score']))
+    Q, filtered = qubo_matrix(n, t, congestion_df, weights_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.0, filtering_percentage=0.5)
     assert isinstance(Q, dict)
     assert len(filtered) == 2
 
@@ -29,6 +30,7 @@ def test_qubo_matrix_max_weight():
     n, t = 3, 2
     vehicle_ids = list(range(n))
     weights_df = make_weights_df(n, t)
-    Q, filtered = qubo_matrix(n, t, weights_df, vehicle_ids, lambda_strategy="max_weight", filtering_percentage=1.0)
+    congestion_df = pd.DataFrame(columns=pd.Index(['edge_id', 'congestion_score']))
+    Q, filtered = qubo_matrix(n, t, congestion_df, weights_df, vehicle_ids, lambda_strategy="max_weight", filtering_percentage=1.0)
     assert isinstance(Q, dict)
     assert len(filtered) == 3 

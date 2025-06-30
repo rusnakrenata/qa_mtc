@@ -143,6 +143,7 @@ def generate_congestion(
         logger.info("Total runtime: %s", datetime.now() - start)
         return grouped
     except Exception as e:
+        session.rollback()
         logger.error(f"Error in generate_congestion: {e}", exc_info=True)
         return pd.DataFrame(columns=pd.Index([
             'edge_id', 'vehicle1', 'vehicle1_route',

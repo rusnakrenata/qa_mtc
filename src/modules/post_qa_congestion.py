@@ -97,6 +97,7 @@ def post_qa_congestion(
         logger.info(f"Recomputed QA congestion for run_config_id={run_config_id}, iteration_id={iteration_id}.")
         return pd.DataFrame(list(result.fetchall()), columns=pd.Index(['edge_id', 'congestion_score']))
     except Exception as e:
+        session.rollback()
         logger.error(f"Error in post_qa_congestion: {e}", exc_info=True)
         raise e
         

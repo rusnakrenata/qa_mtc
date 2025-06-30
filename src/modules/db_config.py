@@ -15,7 +15,7 @@ CONNECTION_URL = f"{DB_DRIVER}://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 
 engine = create_engine(
     CONNECTION_URL,
-    pool_recycle=280,  # seconds (before wait_timeout)
+    pool_recycle=3600,  # seconds (before wait_timeout)
     pool_pre_ping=True
 )
 
