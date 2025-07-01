@@ -83,3 +83,95 @@ def filter_vehicles_by_congested_edges_and_limit(
     logger.info(f"Selected {len(selected_vehicles)} vehicles for QUBO.")
     return selected_vehicles
 
+
+def filter_edges_by_cumulative_congestion(
+    congestion_df: pd.DataFrame,
+    target_fraction: float = 0.8
+) -> pd.DataFrame:
+    """
+    Select the smallest set of edges whose cumulative congestion accounts for at least target_fraction of total congestion.
+    Args:
+        congestion_df: DataFrame with columns ['edge_id', 'congestion_score']
+        target_fraction: Target fraction of total congestion to cover (e.g., 0.8 for 80%)
+    Returns:
+        DataFrame of selected edges with columns ['edge_id', 'congestion_score', 'congestion_score_rel', 'cumulative_congestion']
+    """
+    # Group by edge_id and sum congestion_score
+    grouped = congestion_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
+    # Compute total congestion
+    congestion_score_total = grouped['congestion_score'].sum()
+    # Compute relative congestion per edge
+    grouped = grouped.assign(congestion_score_rel=grouped['congestion_score'] / congestion_score_total)
+    # Sort by congestion_score_rel descending
+    grouped = grouped.sort_values('congestion_score_rel', ascending=False)
+    # Compute cumulative sum
+    grouped['cumulative_congestion'] = grouped['congestion_score_rel'].cumsum()
+    # Select edges until cumulative sum >= target_fraction
+    selected_edges = grouped[grouped['cumulative_congestion'] <= target_fraction]
+    # Always include the first edge that crosses the threshold
+    if not selected_edges.empty:
+        cum_cong = np.asarray(selected_edges['cumulative_congestion'])
+        if cum_cong[-1] < target_fraction and len(selected_edges) < len(grouped):
+            next_edge = grouped.iloc[len(selected_edges)]
+            selected_edges = pd.concat([selected_edges, next_edge.to_frame().T], ignore_index=True)
+    # Ensure return type is always DataFrame
+    if not isinstance(selected_edges, pd.DataFrame):
+        selected_edges = pd.DataFrame(selected_edges)
+    return selected_edges.reset_index(drop=True)
+
+
+def select_vehicles_on_selected_edges(
+    congestion_df: pd.DataFrame,
+    selected_edges_df: pd.DataFrame
+) -> list:
+    """
+    Given selected edges, return unique vehicle IDs that traverse these edges.
+    Args:
+        congestion_df: DataFrame with columns ['edge_id', 'vehicle1', 'vehicle2', ...]
+        selected_edges_df: DataFrame with column 'edge_id' (from filter_edges_by_cumulative_congestion)
+    Returns:
+        List of unique vehicle IDs traversing the selected edges.
+    """
+    selected_edge_ids = list(selected_edges_df['edge_id'])
+    filtered = congestion_df[congestion_df['edge_id'].isin(selected_edge_ids)]
+    vehicles = set(filtered['vehicle1']).union(set(filtered['vehicle2']))
+    return list(vehicles)
+
+
+def select_vehicles_by_cumulative_congestion(
+    congestion_df: pd.DataFrame,
+    target_fraction: float = 0.8
+) -> list:
+    """
+    Select a set of vehicles whose cumulative congestion accounts for at least target_fraction of total vehicle congestion.
+    Args:
+        congestion_df: DataFrame with columns ['vehicle1', 'vehicle2', 'congestion_score']
+        target_fraction: Target fraction of total vehicle congestion to cover (e.g., 0.8 for 80%)
+    Returns:
+        List of selected vehicle IDs.
+    """
+    # Ensure input is a DataFrame
+    congestion_df = pd.DataFrame(congestion_df)
+    # Stack vehicle1 and vehicle2 as 'vehicle' and sum congestion_score
+    v1 = pd.DataFrame(congestion_df[['vehicle1', 'congestion_score']]).rename(columns={'vehicle1': 'vehicle'})
+    v2 = pd.DataFrame(congestion_df[['vehicle2', 'congestion_score']]).rename(columns={'vehicle2': 'vehicle'})
+    all_vehicles = pd.concat([v1, v2], ignore_index=True)
+    vehicle_congestion = all_vehicles.groupby('vehicle', as_index=False)['congestion_score'].sum()
+    # Compute total congestion
+    total_congestion = vehicle_congestion['congestion_score'].sum()
+    # Compute relative congestion per vehicle
+    vehicle_congestion = vehicle_congestion.assign(rel=vehicle_congestion['congestion_score'] / total_congestion)
+    # Sort by relative congestion descending
+    vehicle_congestion = vehicle_congestion.sort_values(by='rel', ascending=False)
+    # Compute cumulative sum
+    vehicle_congestion = vehicle_congestion.assign(cumulative_rel=vehicle_congestion['rel'].cumsum())
+    # Select vehicles until cumulative sum >= target_fraction
+    selected = vehicle_congestion[vehicle_congestion['cumulative_rel'] <= target_fraction]
+    # Always include the first vehicle that crosses the threshold
+    if not selected.empty:
+        cum_rel = np.asarray(selected['cumulative_rel'])
+        if cum_rel[-1] < target_fraction and len(selected) < len(vehicle_congestion):
+            next_vehicle = vehicle_congestion.iloc[len(selected)]
+            selected = pd.concat([selected, next_vehicle.to_frame().T], ignore_index=True)
+    return selected['vehicle'].tolist()
+

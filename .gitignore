@@ -10,6 +10,7 @@ src/cache
 src/__pycache__
 src/modules/cache
 src/modules/files
+src/modules/qubo_matrices
 
 # VS Code settings
 .vscode/

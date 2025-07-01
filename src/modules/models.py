@@ -147,7 +147,7 @@ class QAResult(Base):
     comp_type = Column(String(50))
     num_reads = Column(Integer)
     n_vehicles = Column(Integer)
-    k_alternattives = Column(Integer)
+    k_alternatives = Column(Integer)
     weights = Column(JSON)
     vehicle_ids = Column(JSON)
     assignment_valid = Column(Integer)

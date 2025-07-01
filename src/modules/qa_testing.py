@@ -24,10 +24,9 @@ def get_api_token() -> str:
 
 def authenticate_with_token(token: str) -> bool:
     try:
-        with Client(token=token) as client:
-            # Log useful profile info
-            logger.info(f"Connected as: {client.profile}")
-            return True
+        sampler = DWaveSampler(token=token)
+        logger.info(f"Connected to D-Wave. Solver: {sampler.solver.name}")
+        return True
     except Exception as e:
         logger.error(f"Failed to authenticate with D-Wave: {e}")
         return False
@@ -71,6 +70,7 @@ def qa_testing(
     """
     # --- Authentication ---
     api_token = get_api_token()
+    print("api_token: ", api_token)
     if authenticate_with_token(api_token):
         logger.info("Authentication successful. QA profile loaded.")
     else:
@@ -82,6 +82,7 @@ def qa_testing(
 
     # --- Run sampler ---
     start_time = time.perf_counter()
+    logger.info("Starting QA testing with comp_type: %s", comp_type)
     if comp_type == 'sa':
         sampler = SimulatedAnnealingSampler()
         response = sampler.sample(bqm, num_reads=num_reads, seed=42)
@@ -95,21 +96,25 @@ def qa_testing(
         logger.error(f"Unknown comp_type: {comp_type}")
         raise ValueError(f"Unknown comp_type: {comp_type}")
     duration_qa = time.perf_counter() - start_time
+    logger.info("QA testing completed. Response: %s, duration: %s", response, duration_qa)
+    
 
     # --- Process results ---
-    best_sample, energy = response.first
+    record = response.first
+    best_sample, energy = record[:2]
+    sample_values = list(best_sample.values())
 
     # Check validity (placeholder: always True)
     assignment_valid = all(
-        sum(best_sample.values()[i * t + k] for k in range(t)) == 1
+        sum(sample_values[i * t + k] for k in range(t)) == 1
         for i in range(n)
     )
-    assignment = list(best_sample.values())
+    assignment = [int(x) for x in sample_values]
 
     # --- Save QUBO matrix to file ---
     def save_qubo(Q, filepath):
         with gzip.open(filepath, 'wt', encoding='utf-8') as f:
-            json.dump(Q, f)
+            json.dump({str(k): v for k, v in Q.items()}, f)
 
     filename = f"run_{run_config_id}_iter_{iteration_id}.json.gz"
     qubo_dir = Path("qubo_matrices")

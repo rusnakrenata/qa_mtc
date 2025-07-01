@@ -29,7 +29,7 @@ from typing import Any, List, Tuple, Optional
 from sqlalchemy.orm import sessionmaker
 from models import * #City, Node, Edge, RunConfig, Iteration, Vehicle, VehicleRoute, CongestionMap, RoutePoint  # adjust to your actual model imports
 
-from config import CITY_NAME, N_VEHICLES, K_ALTERNATIVES, MIN_LENGTH, MAX_LENGTH, TIME_STEP, TIME_WINDOW, DIST_THRESH, SPEED_DIFF_THRESH, LAMBDA_STRATEGY, LAMBDA_VALUE, COMP_TYPE, ROUTE_METHOD
+from config import CITY_NAME, N_VEHICLES, K_ALTERNATIVES, MIN_LENGTH, MAX_LENGTH, TIME_STEP, TIME_WINDOW, DIST_THRESH, SPEED_DIFF_THRESH, LAMBDA_STRATEGY, LAMBDA_VALUE, COMP_TYPE, ROUTE_METHOD, FILTERING_PERCENTAGE
 
 # Named constants
 OFFSET_DEG = 0.0000025
@@ -106,11 +106,14 @@ def compute_and_store_congestion(session, run_config, iteration_id) -> pd.DataFr
     )
 
 
-def build_and_save_qubo_matrix(session, run_config, iteration_id, vehicles_gdf, congestion_df, weights_df) -> Tuple[Any, List[Any]]:
+def build_and_save_qubo_matrix(vehicles_gdf, congestion_df, weights_df) -> Tuple[Any, List[Any]]:
     """Build QUBO matrix and save to CSV."""
     vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
     Q, filtered_vehicle_ids = qubo_matrix(
-        N_VEHICLES, K_ALTERNATIVES, congestion_df, weights_df, vehicle_ids, lambda_strategy="normalized", fixed_lambda=1.0, filtering_percentage=0.1, max_qubo_size=None
+        N_VEHICLES, K_ALTERNATIVES, congestion_df, weights_df, 
+        lambda_strategy=LAMBDA_STRATEGY,
+        fixed_lambda=LAMBDA_VALUE,
+        filtering_percentage=FILTERING_PERCENTAGE
     )
     N_FILTERED = len(filtered_vehicle_ids)
     logger.info("Filtered vehicles number: %d", N_FILTERED)
@@ -130,7 +133,7 @@ def build_and_save_qubo_matrix(session, run_config, iteration_id, vehicles_gdf, 
     return Q, filtered_vehicle_ids
 
 
-def visualize_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_routes_dis_df) -> None:
+def visualize_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df) -> None:
     """Visualize congestion and save heatmaps."""
     plot_map = plot_congestion_heatmap_interactive(edges, congestion_df, offset_deg=OFFSET_DEG)
     if plot_map is not None:
@@ -149,6 +152,12 @@ def visualize_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_
         plot_map_dis.save(SHORTEST_DIS_HEATMAP_FILENAME)
     else:
         logger.warning("No distance-based shortest route map data to plot.")
+
+    plot_map_post_qa = plot_congestion_heatmap_interactive(edges, post_qa_congestion_df, offset_deg=OFFSET_DEG)
+    if plot_map_post_qa is not None:
+        plot_map_post_qa.save(POST_QA_HEATMAP_FILENAME)
+    else:
+        logger.warning("No post-qa map data to plot.")
 
 
 
@@ -175,14 +184,42 @@ def main() -> None:
             all_vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
 
             # QUBO matrix
-            Q, filtered_vehicle_ids = build_and_save_qubo_matrix(session, run_config, iteration_id, vehicles_gdf, congestion_df, weights_df)
+            Q, filtered_vehicle_ids = build_and_save_qubo_matrix(vehicles_gdf, congestion_df, weights_df)
 
             # QA testing
+            qa_result = qa_testing(
+                Q=Q,
+                run_config_id=run_config.id,
+                iteration_id=iteration_id,
+                session=session,
+                n=len(filtered_vehicle_ids),
+                t=K_ALTERNATIVES,
+                weights=weights_df.to_dict(orient='records'),
+                vehicle_ids=filtered_vehicle_ids,
+                lambda_strategy=LAMBDA_STRATEGY,
+                lambda_value=LAMBDA_VALUE,
+                comp_type=COMP_TYPE,
+                num_reads=10
+            )
+            qa_assignment = qa_result['assignment']
+            logger.info(f"QA assignment: {qa_assignment}")
+
+            # Post-QA congestion
+            post_qa_congestion_df = post_qa_congestion(
+                session=session,
+                run_config_id=run_config.id,
+                iteration_id=iteration_id,
+                all_vehicle_ids=all_vehicle_ids,
+                optimized_vehicle_ids=filtered_vehicle_ids,
+                qa_assignment=qa_assignment,
+                method=ROUTE_METHOD
+            )
+            logger.info(f"Post-QA congestion result: {post_qa_congestion_df}")
             
 
             shortest_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
             shortest_routes_dis_df = compute_shortest_routes(session, run_config.id, iteration_id, method="distance")
-            visualize_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_routes_dis_df)
+            visualize_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df)
             logger.info("Workflow completed successfully!")
     except Exception as e:
         logger.error("Workflow failed: %s", str(e), exc_info=True)
