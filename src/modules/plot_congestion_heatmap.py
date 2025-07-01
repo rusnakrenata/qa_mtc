@@ -33,6 +33,7 @@ def plot_congestion_heatmap_interactive(
 
     # Aggregate congestion scores by edge_id
     congestion_agg = congestion_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
+    congestion_agg = pd.DataFrame(congestion_agg)
 
     # Merge scores with edges
     merged = edges_gdf.merge(congestion_agg, left_on='id', right_on='edge_id', how='left')

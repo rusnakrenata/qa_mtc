@@ -28,7 +28,6 @@ def post_qa_congestion(
         DataFrame with columns ['edge_id', 'congestion_score']
     """
     try:
-        # Step 1: Build vehicle-route assignment for all vehicles
         vehicle_route_pairs = []
 
         # For optimized vehicles, use QA assignment
@@ -66,47 +65,49 @@ def post_qa_congestion(
                 if row.vehicle_id in non_optimized:
                     vehicle_route_pairs.append((row.vehicle_id, row.route_id))
 
-        # Use the same connection for all temp table operations
-        with session.connection() as conn:
-            conn.execute("""
-                CREATE TEMPORARY TABLE IF NOT EXISTS temp_selected_routes (
-                    vehicle_id INT,
-                    route_id INT
-                )
-            """)
-            # Insert data into temp_selected_routes
-            for vehicle_id, route_id in vehicle_route_pairs:
-                conn.execute(sa_text("""
-                    INSERT INTO temp_selected_routes (vehicle_id, route_id) VALUES (:vehicle_id, :route_id)
-                """), {'vehicle_id': vehicle_id, 'route_id': route_id})
+        # Use a regular table for selected routes
+        session.execute(sa_text("""
+            CREATE TABLE IF NOT EXISTS selected_routes (
+                vehicle_id INT,
+                route_id INT
+            )
+        """))
+        # Clear previous data
+        session.execute(sa_text("TRUNCATE TABLE selected_routes"))
+        for vehicle_id, route_id in vehicle_route_pairs:
+            session.execute(sa_text("""
+                INSERT INTO selected_routes (vehicle_id, route_id) VALUES (:vehicle_id, :route_id)
+            """), {'vehicle_id': vehicle_id, 'route_id': route_id})
+        session.commit()
 
-            # Now run your main query using conn
-            result = conn.execute(sa_text(f"""
-                WITH selected_routes AS (
-                    SELECT vehicle_id, route_id FROM temp_selected_routes
-                ),
-                cm_routes AS (
-                    SELECT vehicle1 as vehicle, vehicle1_route as vehicle_route, edge_id, congestion_score
-                    FROM congestion_map
-                    WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-                    UNION ALL
-                    SELECT vehicle2 as vehicle, vehicle2_route, edge_id, congestion_score
-                    FROM congestion_map
-                    WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
-                )
-                SELECT edge_id, sum(congestion_score) as congestion_score
-                FROM (
-                    SELECT cm.edge_id, cm.vehicle AS vehicle, coalesce(cm.congestion_score / 2,0) AS congestion_score
-                    FROM selected_routes sr
-                    LEFT JOIN cm_routes cm
-                    ON cm.vehicle = sr.vehicle_id AND cm.vehicle_route = sr.route_id
-                ) AS derived
-                WHERE edge_id is not null
-                group by edge_id;
-            """), {'run_config_id': run_config_id, 'iteration_id': iteration_id})
+        # Now run your main query using session
+        result = session.execute(sa_text(f"""
+            WITH cm_routes AS (
+                SELECT vehicle1 as vehicle, vehicle1_route as vehicle_route, edge_id, congestion_score
+                FROM congestion_map
+                WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+                UNION ALL
+                SELECT vehicle2 as vehicle, vehicle2_route, edge_id, congestion_score
+                FROM congestion_map
+                WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+            )
+            SELECT edge_id, sum(congestion_score) as congestion_score
+            FROM (
+                SELECT cm.edge_id, cm.vehicle AS vehicle, coalesce(cm.congestion_score / 2,0) AS congestion_score
+                FROM selected_routes sr
+                LEFT JOIN cm_routes cm
+                ON cm.vehicle = sr.vehicle_id AND cm.vehicle_route = sr.route_id
+            ) AS derived
+            WHERE edge_id is not null
+            group by edge_id;
+        """), {'run_config_id': run_config_id, 'iteration_id': iteration_id})
+        rows = list(result.fetchall())
+        # Optionally, drop the table at the end:
+        # session.execute(sa_text("DROP TABLE selected_routes"))
+        # session.commit()
 
         logger.info(f"Recomputed QA congestion for run_config_id={run_config_id}, iteration_id={iteration_id}.")
-        return pd.DataFrame(list(result.fetchall()), columns=pd.Index(['edge_id', 'congestion_score']))
+        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score']))
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_qa_congestion: {e}", exc_info=True)

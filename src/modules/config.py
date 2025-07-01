@@ -2,7 +2,7 @@
 
 # --- Simulation/City Parameters ---
 CITY_NAME = "Košice, Slovakia"
-N_VEHICLES = 10000
+N_VEHICLES = 250
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
 MAX_LENGTH = 6000
@@ -14,6 +14,6 @@ SPEED_DIFF_THRESH = 2
 # --- QUBO/QA Parameters ---
 LAMBDA_STRATEGY = "normalized"   # or "max_weight"
 LAMBDA_VALUE = 1.0
-COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
+COMP_TYPE = "sa"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"        # or "distance"
 FILTERING_PERCENTAGE = 0.6
