@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 def plot_congestion_heatmap_interactive(
     edges_gdf: gpd.GeoDataFrame,
     congestion_df: Optional[pd.DataFrame],
-    offset_deg: float = 0.00005
+    offset_deg: float = 0.00005,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None
 ) -> Optional[folium.Map]:
     """
     Plot interactive congestion heatmap using Folium with green-to-red color scale and tooltips.
@@ -23,6 +25,8 @@ def plot_congestion_heatmap_interactive(
         edges_gdf: GeoDataFrame of road network edges with geometry.
         congestion_df: DataFrame with columns ['edge_id', 'congestion_score'].
         offset_deg: Offset for parallel lines in degrees.
+        vmin: Minimum value for colormap (optional, for consistent scaling).
+        vmax: Maximum value for colormap (optional, for consistent scaling).
 
     Returns:
         Folium Map object or None if no data.
@@ -51,8 +55,10 @@ def plot_congestion_heatmap_interactive(
     m.fit_bounds([[miny, minx], [maxy, maxx]])
 
     # Colormap
-    vmin = merged['congestion_score'].min()
-    vmax = merged['congestion_score'].max()
+    if vmin is None:
+        vmin = float(merged['congestion_score'].min())
+    if vmax is None:
+        vmax = float(merged['congestion_score'].max())
     colormap = LinearColormap(['silver', 'yellow', 'red', 'purple'], vmin=vmin, vmax=vmax, caption='Congestion Score')
     colormap.add_to(m)
 

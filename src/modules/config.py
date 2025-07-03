@@ -12,8 +12,9 @@ DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
 # --- QUBO/QA Parameters ---
+FILTERING_PERCENTAGE = 0.7
 LAMBDA_STRATEGY = "normalized"   # or "max_weight"
-LAMBDA_VALUE = 1.0
+LAMBDA_VALUE = N_VEHICLES*(1-FILTERING_PERCENTAGE)/100
 COMP_TYPE = "sa"             # 'sa', 'hybrid', or 'qpu'
-ROUTE_METHOD = "duration"        # or "distance"
-FILTERING_PERCENTAGE = 0.6
+ROUTE_METHOD = "duration"       # or "distance"
+R_VALUE = LAMBDA_VALUE

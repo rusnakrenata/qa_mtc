@@ -13,6 +13,7 @@ from models import QAResult
 import logging
 from typing import Any, Dict
 
+
 logger = logging.getLogger(__name__)
 
 def get_api_token() -> str:
@@ -35,17 +36,17 @@ def authenticate_with_token(token: str) -> bool:
 
 def qa_testing(
     Q: dict,
-    run_config_id: int,
+    run_configs_id: int,
     iteration_id: int,
     session: Any,
     n: int,
     t: int,
-    weights=None,
     vehicle_ids=None,
     lambda_strategy=None,
     lambda_value=None,
     comp_type: str = 'hybrid',
-    num_reads: int = 10
+    num_reads: int = 10,
+    vehicle_routes_df=None
 ) -> Dict[str, Any]:
     """
     Run QUBO formulation for the car-to-trase assignment using a specified quantum/classical sampler.
@@ -64,13 +65,15 @@ def qa_testing(
         lambda_value: Lambda value for the QUBO
         comp_type: 'test', 'hybrid', or 'qpu'
         num_reads: Number of reads for classical or QPU runs
+        vehicle_routes_df: DataFrame of vehicle routes (for padding info)
+        method: Route selection method (for padding info)
 
     Returns:
         dict: Results including assignment validity, assignment, energy, and duration.
     """
     # --- Authentication ---
     api_token = get_api_token()
-    print("api_token: ", api_token)
+    #print("api_token: ", api_token)
     if authenticate_with_token(api_token):
         logger.info("Authentication successful. QA profile loaded.")
     else:
@@ -85,7 +88,7 @@ def qa_testing(
     logger.info("Starting QA testing with comp_type: %s", comp_type)
     if comp_type == 'sa':
         sampler = SimulatedAnnealingSampler()
-        response = sampler.sample(bqm, num_reads=num_reads, seed=42)
+        response = sampler.sample(bqm, num_reads=num_reads)
     elif comp_type == 'hybrid':
         sampler = LeapHybridSampler()
         response = sampler.sample(bqm)
@@ -105,18 +108,28 @@ def qa_testing(
     sample_values = list(best_sample.values())
 
     # Check validity (placeholder: always True)
-    assignment_valid = all(
-        sum(sample_values[i * t + k] for k in range(t)) == 1
-        for i in range(n)
-    )
     assignment = [int(x) for x in sample_values]
+
+    # Robust assignment validity check (handles padding)
+    if vehicle_routes_df is None or vehicle_ids is None:
+        raise ValueError("vehicle_routes_df and vehicle_ids must not be None for assignment validity check.")
+
+    valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
+    assignment_valid = True
+    for i, vehicle_id in enumerate(vehicle_ids):
+        # Find valid route indices for this vehicle
+        valid_route_indices = [k for k in range(t) if (vehicle_id, k+1) in valid_pairs]
+        assigned = [assignment[i * t + k] for k in valid_route_indices]
+        if sum(assigned) != 1:
+            assignment_valid = False
+            break
 
     # --- Save QUBO matrix to file ---
     def save_qubo(Q, filepath):
         with gzip.open(filepath, 'wt', encoding='utf-8') as f:
             json.dump({str(k): v for k, v in Q.items()}, f)
 
-    filename = f"run_{run_config_id}_iter_{iteration_id}.json.gz"
+    filename = f"run_{run_configs_id}_iter_{iteration_id}.json.gz"
     qubo_dir = Path("qubo_matrices")
     filepath = qubo_dir / filename
     qubo_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +137,7 @@ def qa_testing(
 
     # --- Store results in DB ---
     result_record = QAResult(
-        run_configs_id=run_config_id,
+        run_configs_id=run_configs_id,
         iteration_id=iteration_id,
         lambda_strategy=lambda_strategy,
         lambda_value=lambda_value,
@@ -132,7 +145,7 @@ def qa_testing(
         num_reads=num_reads,
         n_vehicles=n,
         k_alternatives=t,
-        weights=weights,
+       # weights=weights,
         vehicle_ids=vehicle_ids,
         assignment_valid=int(assignment_valid),
         assignment=assignment,
@@ -158,6 +171,6 @@ def qa_testing(
         'duration': duration_qa,
         'lambda_strategy': lambda_strategy,
         'lambda_value': lambda_value,
-        'weights': weights,
+        #'weights': weights,
         'vehicle_ids': vehicle_ids
     }

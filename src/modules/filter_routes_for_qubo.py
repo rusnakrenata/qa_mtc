@@ -173,5 +173,9 @@ def select_vehicles_by_cumulative_congestion(
         if cum_rel[-1] < target_fraction and len(selected) < len(vehicle_congestion):
             next_vehicle = vehicle_congestion.iloc[len(selected)]
             selected = pd.concat([selected, next_vehicle.to_frame().T], ignore_index=True)
-    return [int(v) for v in selected['vehicle'].tolist()]
+    vehicle_congestion['vehicle'] = vehicle_congestion['vehicle'].astype(int)
+    selected_vehicle_ids = [int(v) for v in selected['vehicle'].tolist()]
+    selected_vehicle_ids_sorted = sorted(selected_vehicle_ids)
+    logger.info(f"Number of selected vehicle indexes: {len(selected_vehicle_ids_sorted)}")
+    return selected_vehicle_ids_sorted
 

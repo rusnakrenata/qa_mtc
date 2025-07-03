@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 def post_qa_congestion(
     session: Any,
-    run_config_id: int,
+    run_configs_id: int,
     iteration_id: int,
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
@@ -31,20 +31,27 @@ def post_qa_congestion(
         vehicle_route_pairs = []
 
         # For optimized vehicles, use QA assignment
+        num_routes = len(qa_assignment) // len(optimized_vehicle_ids)
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
-            route_id = int(qa_assignment[idx]) + 1  # assuming assignment is 0-based
+            assignment = qa_assignment[num_routes * idx : num_routes * (idx + 1)]
+            if assignment.count(1) != 1:
+                # raise ValueError(f"Invalid assignment {assignment} for vehicle {vehicle_id}: not one-hot.")
+                logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Defaulting to first route.")
+                route_id = 1  # Default to first route
+            else:
+                route_id = assignment.index(1) + 1  # 1-based route_id
             vehicle_route_pairs.append((vehicle_id, route_id))
-        print("Optimized vehicles: ", optimized_vehicle_ids)
+        logger.info(f"Number of optimized vehicles: {len(optimized_vehicle_ids)}")
 
         # For non-optimized vehicles, assign by shortest (distance/duration)
         non_optimized = set(all_vehicle_ids) - set(optimized_vehicle_ids)
-        print("Non-optimized vehicles: ", non_optimized)
+        logger.info(f"Number of non-optimized vehicles: {len(non_optimized)}")
         if non_optimized:
             sql = sa_text(f"""
                 WITH shortest_routes AS (
                     SELECT vehicle_id, MIN({method}) AS min_value
                     FROM vehicle_routes
-                    WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+                    WHERE run_configs_id = :run_configs_id AND iteration_id = :iteration_id
                     GROUP BY vehicle_id
                 ),
                 selected_routes AS (
@@ -52,13 +59,13 @@ def post_qa_congestion(
                     FROM vehicle_routes vr
                     JOIN shortest_routes sr
                     ON vr.vehicle_id = sr.vehicle_id AND vr.{method} = sr.min_value
-                    WHERE vr.run_configs_id = :run_config_id AND vr.iteration_id = :iteration_id
+                    WHERE vr.run_configs_id = :run_configs_id AND vr.iteration_id = :iteration_id
                     GROUP BY vr.vehicle_id
                 )
                 SELECT vehicle_id, route_id FROM selected_routes
             """)
             result = session.execute(sql, {
-                'run_config_id': run_config_id,
+                'run_configs_id': run_configs_id,
                 'iteration_id': iteration_id
             })
             for row in result.fetchall():
@@ -80,16 +87,29 @@ def post_qa_congestion(
             """), {'vehicle_id': vehicle_id, 'route_id': route_id})
         session.commit()
 
+        # After building vehicle_route_pairs, check for completeness and uniqueness
+        vehicle_id_counts = {}
+        for vehicle_id, route_id in vehicle_route_pairs:
+            vehicle_id_counts[vehicle_id] = vehicle_id_counts.get(vehicle_id, 0) + 1
+        missing_vehicles = set(all_vehicle_ids) - set(vehicle_id_counts.keys())
+        duplicated_vehicles = [vid for vid, count in vehicle_id_counts.items() if count > 1]
+        if missing_vehicles:
+            logger.warning(f"Missing vehicles in vehicle_route_pairs: {missing_vehicles}")
+        if duplicated_vehicles:
+            logger.warning(f"Duplicated vehicles in vehicle_route_pairs: {duplicated_vehicles}")
+        if not missing_vehicles and not duplicated_vehicles:
+            logger.info(f"All {len(all_vehicle_ids)} vehicles have exactly one route assigned.")
+
         # Now run your main query using session
         result = session.execute(sa_text(f"""
             WITH cm_routes AS (
                 SELECT vehicle1 as vehicle, vehicle1_route as vehicle_route, edge_id, congestion_score
                 FROM congestion_map
-                WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+                WHERE run_configs_id = :run_configs_id AND iteration_id = :iteration_id
                 UNION ALL
                 SELECT vehicle2 as vehicle, vehicle2_route, edge_id, congestion_score
                 FROM congestion_map
-                WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+                WHERE run_configs_id = :run_configs_id AND iteration_id = :iteration_id
             )
             SELECT edge_id, sum(congestion_score) as congestion_score
             FROM (
@@ -100,16 +120,16 @@ def post_qa_congestion(
             ) AS derived
             WHERE edge_id is not null
             group by edge_id;
-        """), {'run_config_id': run_config_id, 'iteration_id': iteration_id})
+        """), {'run_configs_id': run_configs_id, 'iteration_id': iteration_id})
         rows = list(result.fetchall())
         # Optionally, drop the table at the end:
         # session.execute(sa_text("DROP TABLE selected_routes"))
         # session.commit()
 
-        logger.info(f"Recomputed QA congestion for run_config_id={run_config_id}, iteration_id={iteration_id}.")
+        logger.info(f"Recomputed QA congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
         return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score']))
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_qa_congestion: {e}", exc_info=True)
-        raise e
+        return pd.DataFrame()
         

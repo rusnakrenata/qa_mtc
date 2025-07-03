@@ -144,7 +144,7 @@ def generate_vehicle_routes(
     max_nr_of_alternative_routes: int,
     time_step: int,
     time_window: int
-) -> None:
+) -> pd.DataFrame:
     """
     Generate and store vehicle routes and route points using Valhalla API and multiprocessing.
 
@@ -226,6 +226,10 @@ def generate_vehicle_routes(
         session.bulk_save_objects(route_objs)
         session.commit()
         logger.info(f"Routes and route points written to DB in {time.time() - t2:.2f} seconds.")
+        vehicle_routes_df = pd.DataFrame(all_vehicle_routes)
+        #print("vehicle_routes_df: ", vehicle_routes_df)
+        return vehicle_routes_df
     except Exception as e:
         logger.error(f"Error in generate_vehicle_routes: {e}", exc_info=True)
         session.rollback()
+        return pd.DataFrame()

@@ -148,13 +148,35 @@ class QAResult(Base):
     num_reads = Column(Integer)
     n_vehicles = Column(Integer)
     k_alternatives = Column(Integer)
-    weights = Column(JSON)
     vehicle_ids = Column(JSON)
     assignment_valid = Column(Integer)
     assignment = Column(JSON)
     energy = Column(Float)
     duration = Column(Float)
     qubo_path = Column(String(255))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class QuboRunStats(Base):
+    __tablename__ = 'qubo_run_stats'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    filtering_percentage = Column(Float, nullable=True)
+    n_vehicles = Column(Integer, nullable=False)
+    n_filtered_vehicles = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CongestionSummary(Base):
+    """Stores per-edge congestion results for all, post-QA, shortest-duration, and shortest-distance congestion."""
+    __tablename__ = 'congestion_summary'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    edge_id = Column(Integer, nullable=False)
+    congestion_all = Column(Float, nullable=True)
+    congestion_post_qa = Column(Float, nullable=True)
+    congestion_shortest_dur = Column(Float, nullable=True)
+    congestion_shortest_dis = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Create all tables if they do not exist
