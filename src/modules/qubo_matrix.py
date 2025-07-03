@@ -4,8 +4,9 @@ import logging
 import pandas as pd
 from normalize_congestion_weights import normalize_congestion_weights
 from congestion_weights import congestion_weights
-from filter_routes_for_qubo import select_vehicles_by_cumulative_congestion
+from filter_routes_for_qubo import select_vehicles_by_cumulative_congestion, select_vehicles_by_louvain_clustering, select_vehicles_by_leiden_clustering, select_vehicles_by_leiden_joined_clusters
 import time
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ def qubo_matrix(
     lambda_strategy: str = "normalized",
     fixed_lambda: float = 1.0,
     filtering_percentage: Optional[float] = None,
+    target_size: float = 1000.0,
     R: float = 10.0
 ) -> Tuple[Dict[Tuple[int, int], float], List[Any]]:
     """
@@ -36,15 +38,15 @@ def qubo_matrix(
     """
     start_time = time.time()
     logger.info("Starting QUBO vehicle filtering...")
-    vehicle_ids_filtered = select_vehicles_by_cumulative_congestion(congestion_df, filtering_percentage or 1.0)
+    vehicle_ids_filtered = select_vehicles_by_leiden_joined_clusters(congestion_df,target_size=target_size, resolution=1)#select_vehicles_by_cumulative_congestion(congestion_df, filtering_percentage or 1.0)
     n_filtered = len(vehicle_ids_filtered)
     logger.info(f"Vehicle filtering complete. {n_filtered} vehicles selected. Time elapsed: {time.time() - start_time:.2f}s")
 
     logger.info("Computing congestion weights for filtered vehicles...")
     weights_start = time.time()
     if lambda_strategy == "normalized":
-        w, _ = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, R)
-        lambda_penalty = n_filtered * fixed_lambda
+        w, _ = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, round(R * math.sqrt(n_filtered), 7))
+        lambda_penalty = round(math.sqrt(n_filtered) * fixed_lambda, 7)
         logger.info(f"Using normalized weights with fixed lambda_penalty={lambda_penalty}")
     else:
         w, max_w = congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, R)
@@ -59,9 +61,7 @@ def qubo_matrix(
     qubo_start = time.time()
     Q = defaultdict(float)
     for i in range(n_filtered):
-        vi = vehicle_ids_filtered[i]
         for j in range(i + 1, n_filtered):
-            vj = vehicle_ids_filtered[j]
             for k1 in range(t):
                 for k2 in range(t):
                     q1 = i * t + k1

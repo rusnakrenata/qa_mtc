@@ -129,6 +129,7 @@ def build_and_save_qubo_matrix(
     lambda_strategy: str,
     fixed_lambda: float,
     filtering_percentage: float,
+    target_size: float,
     R: float = R_VALUE
 ) -> Tuple[Any, List[Any]]:
     """Build QUBO matrix and save run stats."""
@@ -137,8 +138,22 @@ def build_and_save_qubo_matrix(
         lambda_strategy=lambda_strategy,
         fixed_lambda=fixed_lambda,
         filtering_percentage=filtering_percentage,
+        target_size=target_size,
         R=R
     )
+    # Find the matrix size
+    max_index = 0
+    if Q:
+        max_index = max(max(k[0], k[1]) for k in Q.keys()) + 1
+
+    # Create the matrix and fill it
+    Q_matrix = np.zeros((max_index, max_index))
+    for (q1, q2), value in Q.items():
+        Q_matrix[q1, q2] = value
+
+    # Optionally, use a DataFrame for better CSV output
+    Q_df = pd.DataFrame(Q_matrix)
+    Q_df.to_csv(QUBO_MATRIX_FILENAME, index=True, header=True)
     N_FILTERED = len(filtered_vehicle_ids)
     logger.info("Filtered vehicles number: %d", N_FILTERED)
     stats = QuboRunStats(
@@ -283,7 +298,8 @@ def main() -> None:
             t = get_k_alternatives(session, run_config.id, iteration_id)
             Q, filtered_vehicle_ids = build_and_save_qubo_matrix(
                 vehicle_routes_df, congestion_df, weights_df, session, run_config.id, iteration_id, t,
-                LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE
+                LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE, N_VEHICLES//10,
+                R_VALUE
             )
 
             # Before QA testing, check BQM/QUBO limits

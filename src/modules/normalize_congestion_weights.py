@@ -86,7 +86,7 @@ def normalize_congestion_weights(
         max_w = w[nonzero].max()
         scale = max_w - min_w + 1e-9
         w[nonzero] = (w[nonzero] - min_w) / scale
-        w[nonzero] = np.round(w[nonzero], 4)
+        w[nonzero] = np.round(w[nonzero], 7)
         w_max = 1.0
     else:
         w_max = 0.0

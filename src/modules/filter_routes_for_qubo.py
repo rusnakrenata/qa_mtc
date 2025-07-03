@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Any, Optional, Tuple
+import networkx as nx
+import community as community_louvain  # pip install python-louvain
+from igraph import Graph
+import leidenalg
 
 logger = logging.getLogger(__name__)
 
@@ -177,5 +181,155 @@ def select_vehicles_by_cumulative_congestion(
     selected_vehicle_ids = [int(v) for v in selected['vehicle'].tolist()]
     selected_vehicle_ids_sorted = sorted(selected_vehicle_ids)
     logger.info(f"Number of selected vehicle indexes: {len(selected_vehicle_ids_sorted)}")
+    return selected_vehicle_ids_sorted
+
+
+def select_vehicles_by_louvain_clustering(
+    congestion_df: pd.DataFrame,
+    min_cluster_size: int = 1
+) -> list:
+    """
+    Cluster vehicles using Louvain community detection based on congestion interactions
+    and select the cluster with the highest total inter-vehicle congestion.
+    Args:
+        congestion_df: DataFrame with columns ['vehicle1', 'vehicle2', 'congestion_score']
+        min_cluster_size: Minimum size of cluster to consider (default 1)
+    Returns:
+        List of selected vehicle IDs from the densest cluster.
+    """
+    # Build weighted graph
+    G = nx.Graph()
+    for _, row in congestion_df.iterrows():
+        v1 = int(row['vehicle1'])
+        v2 = int(row['vehicle2'])
+        w = float(row['congestion_score'])
+        if G.has_edge(v1, v2):
+            G[v1][v2]['weight'] += w
+        else:
+            G.add_edge(v1, v2, weight=w)
+    # Louvain partitioning
+    partition = community_louvain.best_partition(G, weight='weight')
+    # Group nodes by cluster
+    clusters = {}
+    for node, cluster_id in partition.items():
+        clusters.setdefault(cluster_id, []).append(node)
+    # Compute total congestion for each cluster
+    cluster_scores = {}
+    for cluster_id, nodes in clusters.items():
+        subgraph = G.subgraph(nodes)
+        total_weight = sum(d['weight'] for u, v, d in subgraph.edges(data=True))
+        if len(nodes) >= min_cluster_size:
+            cluster_scores[cluster_id] = total_weight
+    # Select densest cluster
+    if not cluster_scores:
+        return []
+    densest_cluster = max(list(cluster_scores), key=lambda k: cluster_scores[k])
+    selected_vehicle_ids = sorted(clusters[densest_cluster])
+    logger.info(f"Number of selected vehicle indexes in densest cluster: {len(selected_vehicle_ids)}")
+    return selected_vehicle_ids
+
+
+def select_vehicles_by_leiden_clustering(
+    congestion_df: pd.DataFrame,
+    min_cluster_size: int = 1,
+    resolution: float = 1.0
+) -> list:
+    """
+    Cluster vehicles using Leiden community detection based on congestion interactions
+    and select the cluster with the highest total inter-vehicle congestion.
+    Args:
+        congestion_df: DataFrame with columns ['vehicle1', 'vehicle2', 'congestion_score']
+        min_cluster_size: Minimum size of cluster to consider (default 1)
+        resolution: Resolution parameter for Leiden algorithm (default 1.0)
+    Returns:
+        List of selected vehicle IDs from the densest cluster.
+    """
+    # Prepare nodes and edges
+    edges = list(zip(congestion_df['vehicle1'], congestion_df['vehicle2']))
+    weights = list(congestion_df['congestion_score'])
+    nodes = set(congestion_df['vehicle1']).union(congestion_df['vehicle2'])
+    node_to_idx = {n: i for i, n in enumerate(sorted(nodes))}
+    idx_to_node = {i: n for n, i in node_to_idx.items()}
+    g = Graph()
+    g.add_vertices(len(nodes))
+    g.add_edges([(node_to_idx[u], node_to_idx[v]) for u, v in edges])
+    g.es['weight'] = weights
+    # Leiden partitioning
+    part = leidenalg.find_partition(
+        g,
+        leidenalg.RBConfigurationVertexPartition,
+        weights='weight',
+        resolution_parameter=resolution
+    )
+    # Build clusters as lists of vehicle IDs
+    clusters = [[idx_to_node[i] for i in community] for community in part]
+    # Compute total congestion for each cluster
+    cluster_scores = {}
+    for idx, community in enumerate(part):
+        if len(community) >= min_cluster_size:
+            subgraph = g.subgraph(community)
+            total_weight = sum(subgraph.es['weight']) if subgraph.ecount() > 0 else 0.0
+            cluster_scores[idx] = total_weight
+    # Select densest cluster
+    if cluster_scores:
+        densest_cluster = max(list(cluster_scores), key=lambda k: cluster_scores[k])
+        selected_vehicle_ids = sorted([idx_to_node[i] for i in part[densest_cluster]])
+    else:
+        # Fallback: pick the largest cluster
+        largest_cluster = max(range(len(part)), key=lambda k: len(part[k]))
+        selected_vehicle_ids = sorted([idx_to_node[i] for i in part[largest_cluster]])
+    logger.info(f"Number of selected vehicle indexes in chosen Leiden cluster: {len(selected_vehicle_ids)}")
+    return selected_vehicle_ids
+
+
+def select_vehicles_by_leiden_joined_clusters(
+    congestion_df: pd.DataFrame,
+    target_size: float,
+    resolution: float = 1.0
+) -> list:
+    """
+    Cluster vehicles using Leiden community detection and join clusters until the total number of vehicles
+    reaches or exceeds the target_size. Clusters are added in order of descending total congestion.
+    Args:
+        congestion_df: DataFrame with columns ['vehicle1', 'vehicle2', 'congestion_score']
+        target_size: Minimum number of vehicles to select (e.g., N_VEHICLES//4)
+        resolution: Resolution parameter for Leiden algorithm (default 1.0)
+    Returns:
+        List of selected vehicle IDs from the joined clusters.
+    """
+    # Prepare nodes and edges
+    edges = list(zip(congestion_df['vehicle1'], congestion_df['vehicle2']))
+    weights = list(congestion_df['congestion_score'])
+    nodes = set(congestion_df['vehicle1']).union(congestion_df['vehicle2'])
+    node_to_idx = {n: i for i, n in enumerate(sorted(nodes))}
+    idx_to_node = {i: n for n, i in node_to_idx.items()}
+    g = Graph()
+    g.add_vertices(len(nodes))
+    g.add_edges([(node_to_idx[u], node_to_idx[v]) for u, v in edges])
+    g.es['weight'] = weights
+    # Leiden partitioning
+    part = leidenalg.find_partition(
+        g,
+        leidenalg.RBConfigurationVertexPartition,
+        weights='weight',
+        resolution_parameter=resolution
+    )
+    # Build clusters as lists of vehicle IDs and compute their total congestion
+    cluster_info = []
+    for idx, community in enumerate(part):
+        subgraph = g.subgraph(community)
+        total_weight = sum(subgraph.es['weight']) if subgraph.ecount() > 0 else 0.0
+        vehicle_ids = [idx_to_node[i] for i in community]
+        cluster_info.append((total_weight, vehicle_ids))
+    # Sort clusters by total congestion (descending)
+    cluster_info.sort(reverse=True, key=lambda x: x[0])
+    # Join clusters until target_size is reached
+    selected_vehicle_ids = set()
+    for _, vehicle_ids in cluster_info:
+        selected_vehicle_ids.update(vehicle_ids)
+        if len(selected_vehicle_ids) >= target_size:
+            break
+    selected_vehicle_ids_sorted = sorted(selected_vehicle_ids)
+    logger.info(f"Number of selected vehicle indexes in joined Leiden clusters: {len(selected_vehicle_ids_sorted)}")
     return selected_vehicle_ids_sorted
 

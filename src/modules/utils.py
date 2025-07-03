@@ -8,7 +8,7 @@ from shapely.geometry import Point, LineString
 from shapely.strtree import STRtree
 from pyproj import Transformer
 from scipy.spatial.distance import pdist, squareform
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree # type: ignore
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import osmnx as ox
@@ -73,12 +73,12 @@ def bearing_to_cardinal(bearing: float) -> str:
 
 def find_closest_osm_edge_2(lat: float, lng: float, edge_tree: Any, transformer: Optional[Any] = None, geometry_to_id: Optional[Dict[Any, Any]] = None) -> Dict[str, Any]:
     """Find the closest OSM edge using a spatial index and transformer."""
-    x, y = transformer.transform(lng, lat)
+    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
     point = Point(x, y)
     geometry, dist = edge_tree.query_nearest(point, return_distance=True)
     if isinstance(geometry, np.ndarray):
         geometry = geometry.item()
-    edge_id = geometry_to_id.get(geometry, None)
+    edge_id = geometry_to_id.get(geometry, None) if geometry_to_id is not None else None
     return {
         'id': edge_id,
         'geometry': geometry,
@@ -88,7 +88,7 @@ def find_closest_osm_edge_2(lat: float, lng: float, edge_tree: Any, transformer:
 
 def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, edge_tree: Any, transformer: Optional[Any] = None) -> Dict[str, Any]:
     """Find the closest OSM edge using a GeoDataFrame and spatial index."""
-    x, y = transformer.transform(lng, lat)
+    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
     point = Point(x, y)
     index = edge_tree.nearest(point)
     edge_row = edges_gdf.iloc[index]
@@ -101,7 +101,7 @@ def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, e
 
 def find_approx_nearest_edge(lat: float, lng: float, edges_gdf_proj: gpd.GeoDataFrame, kdtree: Any, transformer: Any) -> Dict[str, Any]:
     """Find the nearest edge using a projected GeoDataFrame and KDTree."""
-    x, y = transformer.transform(lng, lat)
+    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
     dist, idx = kdtree.query([x, y])
     edge_row = edges_gdf_proj.iloc[idx]
     return {
@@ -131,7 +131,14 @@ def compute_spatial_density_with_speed(df: pd.DataFrame, dist_thresh: float = 10
     gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['lon'], df['lat']), crs='EPSG:4326').to_crs(epsg=3857)
     results = []
     grouped = gdf.groupby(['time', 'edge_id', 'cardinal'])
-    for (time, edge_id, cardinal), group in grouped:
+    for group_key, group in grouped:
+        if not isinstance(group_key, tuple):
+            group_key = (group_key,)
+        if len(group_key) == 3:
+            time, edge_id, cardinal = group_key
+        else:
+            # fallback: fill missing with None
+            time, edge_id, cardinal = (list(group_key) + [None, None, None])[:3]
         if len(group) < 2:
             results.append({
                 'time': time,
@@ -230,7 +237,7 @@ def find_nearest_edge_hybrid(lat, lng, transformer, edges_gdf,
                               ckdtree, strtree, geom_to_index,
                               centroid_coords, k=5):
     # Transform lat/lng to projected x, y
-    x, y = transformer.transform(lng, lat)
+    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
     query_point = Point(x, y)
 
     # Step 1: Fast k-NN centroid lookup using cKDTree
