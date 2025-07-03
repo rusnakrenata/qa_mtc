@@ -44,7 +44,7 @@ def qubo_matrix(
     weights_start = time.time()
     if lambda_strategy == "normalized":
         w, _ = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, R)
-        lambda_penalty = fixed_lambda
+        lambda_penalty = n_filtered * fixed_lambda
         logger.info(f"Using normalized weights with fixed lambda_penalty={lambda_penalty}")
     else:
         w, max_w = congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, R)

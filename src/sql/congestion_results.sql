@@ -1,4 +1,4 @@
-select assignment_valid
+select n_vehicles, lambda_value,assignment_valid
 from trafficOptimization.qa_results qr 
 where run_configs_id = %s and iteration_id = %s;
 select sum(congestion_all) as congestion_all, sum(congestion_post_qa) as congestion_post_qa, 

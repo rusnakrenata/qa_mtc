@@ -20,7 +20,7 @@ def get_api_token() -> str:
     """
     Retrieve the API token securely from environment variable or fallback.
     """
-    return os.environ.get('QA_API_TOKEN', '123456456afsdgaeh')
+    return os.environ.get('QA_API_TOKEN', 'notoken')
 
 
 def authenticate_with_token(token: str) -> bool:
