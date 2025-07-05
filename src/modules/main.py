@@ -36,6 +36,7 @@ QUBO_OUTPUT_DIR = Path("files")
 QUBO_MATRIX_FILENAME = QUBO_OUTPUT_DIR / "qubo_matrix.csv"
 CONGESTION_WEIGHTS_FILENAME = QUBO_OUTPUT_DIR / "congestion_weights.csv"
 CONGESTION_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "congestion_heatmap.html"
+AFFECTED_EDGES_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "affected_edges_heatmap.html"
 SHORTEST_DUR_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dur_congestion_heatmap.html"
 SHORTEST_DIS_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dis_congestion_heatmap.html"
 POST_QA_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "post_qa_congestion_heatmap.html"
@@ -131,9 +132,9 @@ def build_and_save_qubo_matrix(
     filtering_percentage: float,
     target_size: float,
     R: float = R_VALUE
-) -> Tuple[Any, List[Any]]:
+) -> Tuple[Any, List[Any], pd.DataFrame]:
     """Build QUBO matrix and save run stats."""
-    Q, filtered_vehicle_ids = qubo_matrix(
+    Q, filtered_vehicle_ids, affected_edges_df = qubo_matrix(
         t, congestion_df, weights_df, vehicle_routes_df,
         lambda_strategy=lambda_strategy,
         fixed_lambda=fixed_lambda,
@@ -151,9 +152,16 @@ def build_and_save_qubo_matrix(
     for (q1, q2), value in Q.items():
         Q_matrix[q1, q2] = value
 
-    # Optionally, use a DataFrame for better CSV output
+    # Create DataFrame with proper column and row labels
     Q_df = pd.DataFrame(Q_matrix)
-    Q_df.to_csv(QUBO_MATRIX_FILENAME, index=True, header=True)
+    
+    # Add column numbers as headers (formatted to 9 characters)
+    Q_df.columns = [f'{0:18g}'] + [f'{i:9g}' for i in range(1, max_index)]
+    Q_df.index = [f'{i:9g}' for i in range(max_index)]
+    
+   
+    # Save with custom formatting - 9 characters per number
+    Q_df.to_csv(QUBO_MATRIX_FILENAME, index=True, header=True, float_format='%9g')
     N_FILTERED = len(filtered_vehicle_ids)
     logger.info("Filtered vehicles number: %d", N_FILTERED)
     stats = QuboRunStats(
@@ -165,12 +173,13 @@ def build_and_save_qubo_matrix(
     )
     session.add(stats)
     session.commit()
-    return Q, filtered_vehicle_ids
+    return Q, filtered_vehicle_ids, affected_edges_df
 
 
 def visualize_and_save_congestion(
     edges: gpd.GeoDataFrame,
     congestion_df: pd.DataFrame,
+    affected_edges_df: pd.DataFrame,
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
     post_qa_congestion_df: pd.DataFrame
@@ -186,6 +195,9 @@ def visualize_and_save_congestion(
     plot_map = plot_congestion_heatmap_interactive(edges, congestion_df, offset_deg=OFFSET_DEG)
     if plot_map is not None:
         plot_map.save(CONGESTION_HEATMAP_FILENAME)
+    plot_map_affected_edges = plot_congestion_heatmap_interactive(edges, affected_edges_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
+    if plot_map_affected_edges is not None:
+        plot_map_affected_edges.save(AFFECTED_EDGES_HEATMAP_FILENAME)
     plot_map_dur = plot_congestion_heatmap_interactive(edges, shortest_routes_dur_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_dur is not None:
         plot_map_dur.save(SHORTEST_DUR_HEATMAP_FILENAME)
@@ -296,7 +308,7 @@ def main() -> None:
 
             # QUBO matrix
             t = get_k_alternatives(session, run_config.id, iteration_id)
-            Q, filtered_vehicle_ids = build_and_save_qubo_matrix(
+            Q, filtered_vehicle_ids, affected_edges_df = build_and_save_qubo_matrix(
                 vehicle_routes_df, congestion_df, weights_df, session, run_config.id, iteration_id, t,
                 LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE, N_VEHICLES//10,
                 R_VALUE
@@ -340,7 +352,8 @@ def main() -> None:
 
             shortest_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
             shortest_routes_dis_df = compute_shortest_routes(session, run_config.id, iteration_id, method="distance")
-            visualize_and_save_congestion(edges, congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df)
+            # I changed the congestion_df to affected_edges_df - from leiden clustering
+            visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df)
 
             save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, run_config, iteration_id)
             run_congestion_results_sql(session, run_config.id, iteration_id)

@@ -92,7 +92,17 @@ def generate_vehicles(
         vehicles_df['destination_geometry'] = vehicles_df['destination_geometry'].apply(lambda x: Point(x.x, x.y))
         vehicles_gdf = gpd.GeoDataFrame(vehicles_df, geometry='origin_geometry', crs='EPSG:4326')
     else:
-        vehicles_gdf = gpd.GeoDataFrame(columns=['vehicle_id', 'origin_edge_id', 'origin_position_on_edge', 'origin_geometry', 'destination_edge_id', 'destination_position_on_edge', 'destination_geometry'], geometry='origin_geometry', crs='EPSG:4326')
+        empty_data = {
+            'vehicle_id': [],
+            'origin_edge_id': [],
+            'origin_position_on_edge': [],
+            'origin_geometry': [],
+            'destination_edge_id': [],
+            'destination_position_on_edge': [],
+            'destination_geometry': []
+        }
+        empty_df = pd.DataFrame(empty_data)
+        vehicles_gdf = gpd.GeoDataFrame(empty_df, geometry='origin_geometry', crs='EPSG:4326')
     logger.info(f"Generated {len(vehicles_gdf)} vehicles for run_config_id={run_config_id}, iteration_id={iteration_id}.")
     return vehicles_gdf
 

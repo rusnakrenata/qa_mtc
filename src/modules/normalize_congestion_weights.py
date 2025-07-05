@@ -74,13 +74,16 @@ def normalize_congestion_weights(
                     pair2 = (vj, k2 + 1)
                     if key in weights_lookup:
                         w[i, j, k1, k2] = weights_lookup[key]
+                        print("......................")
+                        print("Weights for i,j,k1,k2", i,j,k1,k2,w[i, j, k1, k2])
+                        print("......................")
                     elif (pair1 in valid_pairs) and (pair2 in valid_pairs):
                         w[i, j, k1, k2] = 0.0
                     elif (pair1 in invalid_pairs) or (pair2 in invalid_pairs):
-                        w[i, j, k1, k2] = R
+                        w[i, j, k1, k2] = 0.0#R
 
     # 5. Normalize all nonzero weights to [0, 1] and round to 4 digits
-    nonzero = (w != 0) & (w != R)
+    nonzero = (w != 0) 
     if np.any(nonzero):
         min_w = w[nonzero].min()
         max_w = w[nonzero].max()

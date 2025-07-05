@@ -114,15 +114,19 @@ def qa_testing(
     if vehicle_routes_df is None or vehicle_ids is None:
         raise ValueError("vehicle_routes_df and vehicle_ids must not be None for assignment validity check.")
 
-    valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
     assignment_valid = True
     for i, vehicle_id in enumerate(vehicle_ids):
-        # Find valid route indices for this vehicle
-        valid_route_indices = [k for k in range(t) if (vehicle_id, k+1) in valid_pairs]
-        assigned = [assignment[i * t + k] for k in valid_route_indices]
-        if sum(assigned) != 1:
+        # Get assignment for all routes for this vehicle
+        assignment_slice = assignment[i * t : (i + 1) * t]
+        # Check if exactly one route is selected (one-hot constraint)
+        if assignment_slice.count(1) != 1:
             assignment_valid = False
+           # logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assignment: {assignment_slice}")
             break
+        else:
+            # Find which route was selected (0-based index)
+            selected_route_index = assignment_slice.index(1)
+          #  logger.info(f"Vehicle {vehicle_id} assigned to route {selected_route_index + 1} (index {selected_route_index})")
 
     # --- Save QUBO matrix to file ---
     def save_qubo(Q, filepath):

@@ -179,6 +179,16 @@ class CongestionSummary(Base):
     congestion_shortest_dis = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class SelectedRoute(Base):
+    """SelectedRoute table: stores the routes selected by QA optimization for each vehicle."""
+    __tablename__ = 'selected_routes'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 # Create all tables if they do not exist
 Base.metadata.create_all(engine)
 

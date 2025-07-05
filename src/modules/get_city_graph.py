@@ -18,6 +18,16 @@ def get_city_graph(city_name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         edges: DataFrame of edges
     """
     try:
+        ## FOR TESTING
+        # Coordinates of Hlavná ulica (Košice center)
+        #kosice_center = (48.7208, 21.2575)  # (lat, lon)
+        
+        # Coordinates of the roundabout near Moldavská cesta (OC Optima)
+        #moldavska_roundabout = (48.7019, 21.2446)  # (lat, lon)
+
+        # Get a drivable road network within 1.5 km radius of city center
+        #G = ox.graph_from_point(kosice_center, dist=500, network_type='drive')
+
         G = ox.graph_from_place(city_name, network_type='drive')
         G.graph['crs'] = 'epsg:4326'
         nodes, edges = ox.graph_to_gdfs(G)
