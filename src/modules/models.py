@@ -55,15 +55,18 @@ class Edge(Base):
 class Iteration(Base):
     """Iteration table: stores simulation iterations."""
     __tablename__ = 'iterations'
-    id = Column(Integer, primary_key=True)
     iteration_id = Column(Integer, nullable=False)
-    run_configs_id = Column(Integer)  # Link to RunConfig
+    run_configs_id = Column(Integer, nullable=False)  # Link to RunConfig
     created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id'),
+        Index('idx_run_iter', 'run_configs_id', 'iteration_id')
+    )
 
 class RunConfig(Base):
     """RunConfig table: stores simulation configuration."""
     __tablename__ = 'run_configs'
-    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
     n_cars = Column(Integer)
     k_alternatives = Column(Integer)

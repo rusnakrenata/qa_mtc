@@ -95,43 +95,43 @@ def get_or_create_run_config_for_city(session, city) -> Any:
     )
 
 
-def create_simulation_iteration(session, run_config) -> Optional[int]:
+def create_simulation_iteration(session, run_configs_id) -> Optional[int]:
     """Create a new simulation iteration."""
-    iteration_id = create_iteration(session, run_config.id, None, Iteration)
+    iteration_id = create_iteration(session, run_configs_id, None, Iteration)
     if iteration_id is None:
         logger.warning("No new iteration created. Exiting workflow.")
     return iteration_id
 
 
-def generate_and_store_vehicles(session, run_config, iteration_id) -> Any:
+def generate_and_store_vehicles(session, run_configs, iteration_id) -> Any:
     """Generate vehicles and store them in the database."""
     logger.info("Generate vehicles at: %s", datetime.now())
     return generate_vehicles(
-        session, Vehicle, run_config.id, iteration_id,
-        get_city_data_from_db(session, run_config.city_id)[1], N_VEHICLES, MIN_LENGTH, MAX_LENGTH
+        session, Vehicle, run_configs.run_configs_id, iteration_id,
+        get_city_data_from_db(session, run_configs.city_id)[1], N_VEHICLES, MIN_LENGTH, MAX_LENGTH
     )
 
 
-def generate_and_store_routes(session, run_config, iteration_id, vehicles_gdf, edges) -> pd.DataFrame:
+def generate_and_store_routes(session, run_configs_id, iteration_id, vehicles_gdf, edges) -> pd.DataFrame:
     """Generate vehicle routes and store them in the database."""
     logger.info("Generate vehicle routes at: %s", datetime.now())
     vehicle_routes_df = generate_vehicle_routes(
         session, VehicleRoute, RoutePoint,
-        run_config.id, iteration_id,
+        run_configs_id, iteration_id,
         vehicles_gdf, edges, K_ALTERNATIVES, TIME_STEP, TIME_WINDOW
     )
     return vehicle_routes_df
 
 
-def compute_and_store_congestion(session, run_config, iteration_id) -> pd.DataFrame:
+def compute_and_store_congestion(session, run_configs_id, iteration_id) -> pd.DataFrame:
     """Compute congestion and store in the database."""
     logger.info("Compute congestion at: %s", datetime.now())
     congestion_df = generate_congestion(
         session, CongestionMap,
-        run_config.id, iteration_id,
+        run_configs_id, iteration_id,
         DIST_THRESH, SPEED_DIFF_THRESH
     )
-    return congestion_df  # Do not groupby here
+    return congestion_df  # Do not groupby h
 
 
 def get_k_alternatives(session, run_configs_id, iteration_id):
@@ -255,7 +255,7 @@ def save_congestion_summary(
     merged = merged.fillna(0)
     records = [
         CongestionSummary(
-            run_configs_id=run_config.id,
+            run_configs_id=run_config.run_configs_id,
             iteration_id=iteration_id,
             edge_id=int(row['edge_id']),
             congestion_all=float(row['congestion_all']),
@@ -320,22 +320,22 @@ def main() -> None:
             if not isinstance(edges, gpd.GeoDataFrame):
                 edges = gpd.GeoDataFrame(edges)
             run_config = get_or_create_run_config_for_city(session, city)
-            iteration_id = create_simulation_iteration(session, run_config)
+            iteration_id = create_simulation_iteration(session, run_config.run_configs_id)
             if iteration_id is None:
                 return
             vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id)
-            vehicle_routes_df = generate_and_store_routes(session, run_config, iteration_id, vehicles_gdf, edges)
-            congestion_df = compute_and_store_congestion(session, run_config, iteration_id)
-            weights_df = get_congestion_weights(session, run_config.id, iteration_id)
+            vehicle_routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles_gdf, edges)
+            congestion_df = compute_and_store_congestion(session, run_config.run_configs_id, iteration_id)
+            weights_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
             weights_df.to_csv(CONGESTION_WEIGHTS_FILENAME, index=False)
 
             # Filtering for QUBO
             all_vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
 
             # QUBO matrix
-            t = get_k_alternatives(session, run_config.id, iteration_id)
+            t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
             Q, filtered_vehicle_ids, affected_edges_df = build_and_save_qubo_matrix(
-                vehicle_routes_df, congestion_df, weights_df, session, run_config.id, iteration_id, t,
+                vehicle_routes_df, congestion_df, weights_df, session, run_config.run_configs_id, iteration_id, t,
                 LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE, N_VEHICLES//10,
                 R_VALUE
             )
@@ -346,7 +346,7 @@ def main() -> None:
             # QA testing
             qa_result = qa_testing(
                 Q=Q,
-                run_configs_id=run_config.id,
+                run_configs_id=run_config.run_configs_id,
                 iteration_id=iteration_id,
                 session=session,
                 n=len(filtered_vehicle_ids),
@@ -364,7 +364,7 @@ def main() -> None:
             # Post-QA congestion
             post_qa_congestion_df = post_qa_congestion(
                 session=session,
-                run_configs_id=run_config.id,
+                run_configs_id=run_config.run_configs_id,
                 iteration_id=iteration_id,
                 all_vehicle_ids=all_vehicle_ids,
                 optimized_vehicle_ids=filtered_vehicle_ids,
@@ -376,13 +376,13 @@ def main() -> None:
                 post_qa_congestion_df = pd.DataFrame(post_qa_congestion_df)
             logger.info(f"Post-QA congestion result: {post_qa_congestion_df}")
 
-            shortest_routes_dur_df = compute_shortest_routes(session, run_config.id, iteration_id, method="duration")
-            shortest_routes_dis_df = compute_shortest_routes(session, run_config.id, iteration_id, method="distance")
+            shortest_routes_dur_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="duration")
+            shortest_routes_dis_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="distance")
             # I changed the congestion_df to affected_edges_df - from leiden clustering
             visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df)
 
             save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, run_config, iteration_id)
-            run_congestion_results_sql(session, run_config.id, iteration_id)
+            run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 
             logger.info("Workflow completed successfully!")
     except Exception as e:

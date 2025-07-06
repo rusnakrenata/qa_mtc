@@ -42,7 +42,7 @@ def get_or_create_run_config(
             time_window=time_window
         ).first()
         if existing_run:
-            logger.info(f"Run config already exists (run_id={existing_run.id}), skipping insertion.")
+            logger.info(f"Run config already exists (run_id={existing_run.run_configs_id}), skipping insertion.")
             return existing_run
         else:
             run_config = RunConfig(
@@ -56,7 +56,7 @@ def get_or_create_run_config(
             )
             session.add(run_config)
             session.commit()
-            logger.info(f"Run configuration saved (run_id={run_config.id}).")
+            logger.info(f"Run configuration saved (run_id={run_config.run_configs_id}).")
             return run_config
     except Exception as e:
         logger.error(f"Error in get_or_create_run_config: {e}", exc_info=True)
