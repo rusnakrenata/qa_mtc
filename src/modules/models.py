@@ -33,7 +33,7 @@ class City(Base):
 class Node(Base):
     """Node table: stores graph nodes."""
     __tablename__ = 'nodes'
-    id = Column(Integer, primary_key=True)
+    node_id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
     osmid = Column(String(255))
     x = Column(Numeric(9,6))
@@ -44,7 +44,7 @@ class Node(Base):
 class Edge(Base):
     """Edge table: stores graph edges."""
     __tablename__ = 'edges'
-    id = Column(Integer, primary_key=True)
+    edge_id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
     u = Column(String(255))
     v = Column(String(255))

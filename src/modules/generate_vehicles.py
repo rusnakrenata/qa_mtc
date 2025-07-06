@@ -58,10 +58,10 @@ def generate_vehicles(
                 vehicle_id += 1
                 vehicle = {
                     'vehicle_id': vehicle_id,
-                    'origin_edge_id': origin_edge['id'],
+                    'origin_edge_id': origin_edge['edge_id'],
                     'origin_position_on_edge': origin_position_on_edge,
                     'origin_geometry': origin_point,
-                    'destination_edge_id': destination_edge['id'],
+                    'destination_edge_id': destination_edge['edge_id'],
                     'destination_position_on_edge': destination_position_on_edge,
                     'destination_geometry': destination_point
                 }
@@ -70,10 +70,10 @@ def generate_vehicles(
                     vehicle_id=vehicle_id,
                     run_configs_id=run_config_id,
                     iteration_id=iteration_id,
-                    origin_edge_id=origin_edge['id'],
+                    origin_edge_id=origin_edge['edge_id'],
                     origin_position_on_edge=origin_position_on_edge,
                     origin_geometry=origin_point,
-                    destination_edge_id=destination_edge['id'],
+                    destination_edge_id=destination_edge['edge_id'],
                     destination_position_on_edge=destination_position_on_edge,
                     destination_geometry=destination_point
                 )

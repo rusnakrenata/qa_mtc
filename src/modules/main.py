@@ -247,7 +247,7 @@ def save_congestion_summary(
 ) -> None:
     """Save congestion summary to the database."""
     congestion_df_grouped = congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
-    merged = pd.DataFrame({'edge_id': edges.drop_duplicates(subset='id')['id']})
+    merged = pd.DataFrame({'edge_id': edges.drop_duplicates(subset='edge_id')['edge_id']})
     merged = merged.merge(congestion_df_grouped[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_all'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(post_qa_congestion_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_qa'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dur_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dur'}), on='edge_id', how='left')  # type: ignore

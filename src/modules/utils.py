@@ -93,7 +93,7 @@ def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, e
     index = edge_tree.nearest(point)
     edge_row = edges_gdf.iloc[index]
     return {
-        'id': edge_row.get('id', None),
+        'id': edge_row.get('edge_id', None),
         'geometry': edge_row.geometry,
         'distance_meters': 0
     }

@@ -24,13 +24,13 @@ def get_city_data_from_db(
     """
     try:
         nodes_query = session.execute(
-            text(f"SELECT id, geometry AS geometry FROM nodes WHERE city_id = {city_id}")
+            text(f"SELECT node_id, geometry AS geometry FROM nodes WHERE city_id = {city_id}")
         )
         edges_query = session.execute(
-            text(f"SELECT id, geometry AS geometry FROM edges WHERE city_id = {city_id}")
+            text(f"SELECT edge_id, geometry AS geometry FROM edges WHERE city_id = {city_id}")
         )
-        nodes_df = pd.DataFrame(nodes_query.fetchall(), columns=["id", "geometry"]) #type: ignore
-        edges_df = pd.DataFrame(edges_query.fetchall(), columns=["id", "geometry"]) #type: ignore
+        nodes_df = pd.DataFrame(nodes_query.fetchall(), columns=["node_id", "geometry"]) #type: ignore
+        edges_df = pd.DataFrame(edges_query.fetchall(), columns=["edge_id", "geometry"]) #type: ignore
         nodes_df['geometry'] = nodes_df['geometry'].apply(wkt.loads)
         edges_df['geometry'] = edges_df['geometry'].apply(wkt.loads)
         nodes_gdf = gpd.GeoDataFrame(nodes_df, geometry='geometry', crs='EPSG:4326')

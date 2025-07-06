@@ -40,9 +40,9 @@ def plot_congestion_heatmap_interactive(
     congestion_agg = pd.DataFrame(congestion_agg)
 
     # Merge scores with edges
-    merged = edges_gdf.merge(congestion_agg, left_on='id', right_on='edge_id', how='left')
+    merged = edges_gdf.merge(congestion_agg, left_on='edge_id', right_on='edge_id', how='left')
     merged['congestion_score'] = merged['congestion_score'].fillna(0)
-    merged['edge_id'] = merged['id']
+    merged['edge_id'] = merged['edge_id']
 
     # Convert to WGS84 for mapping
     merged = merged.to_crs(epsg=4326)
@@ -81,10 +81,10 @@ def plot_congestion_heatmap_interactive(
                     color=colormap(row['congestion_score']),
                     weight=3,
                     opacity=0.7,
-                    tooltip=f"Edge ID: {row['id']}<br>Score: {row['congestion_score']:.2f}"
+                    tooltip=f"Edge ID: {row['edge_id']}<br>Score: {row['congestion_score']:.2f}"
                 ).add_to(m)
         except Exception as e:
-            logger.warning(f"Skipping edge {row['id']} due to offset error: {e}")
+            logger.warning(f"Skipping edge {row['edge_id']} due to offset error: {e}")
     return m
 
 
@@ -107,7 +107,7 @@ def plot_congestion_heatmap(
         logger.warning("No congestion map data to plot.")
         return
     # Merge and clean
-    merged_gdf = edges_gdf.merge(congestion_df, left_on='id', right_on='edge_id', how='left')
+    merged_gdf = edges_gdf.merge(congestion_df, left_on='edge_id', right_on='edge_id', how='left')
     merged_gdf['congestion_score'] = merged_gdf['congestion_score'].fillna(0)
     # Plot
     fig, ax = plt.subplots(figsize=figsize)
