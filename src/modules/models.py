@@ -79,7 +79,6 @@ class RunConfig(Base):
 class Vehicle(Base):
     """Vehicle table: stores vehicle metadata."""
     __tablename__ = 'vehicles'
-    id = Column(Integer, primary_key=True)
     vehicle_id = Column(BigInteger, nullable=False) 
     run_configs_id = Column(Integer,  nullable=False)  # Link to RunConfig
     iteration_id = Column(Integer, nullable=False) 
@@ -90,6 +89,10 @@ class Vehicle(Base):
     destination_position_on_edge = Column(Float)
     destination_geometry = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('vehicle_id', 'run_configs_id', 'iteration_id'),
+        Index('idx_run_iter_vehicle', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
 
 class VehicleRoute(Base):
     """VehicleRoute table: stores route alternatives for each vehicle."""
@@ -132,7 +135,7 @@ class RoutePoint(Base):
 class CongestionMap(Base):
     """CongestionMap table: stores pairwise congestion scores."""
     __tablename__ = 'congestion_map'
-    id = Column(Integer, primary_key=True)
+    congestion_map_id = Column(Integer, primary_key=True)
     run_configs_id = Column(Integer,  nullable=False)
     iteration_id = Column(Integer, nullable=False)
     edge_id = Column(Integer,  nullable=False)
@@ -146,7 +149,7 @@ class CongestionMap(Base):
 class QAResult(Base):
     """QAResult table: stores results of QUBO/QA optimization runs."""
     __tablename__ = 'qa_results'
-    id = Column(Integer, primary_key=True)
+    qa_result_id = Column(Integer, primary_key=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     lambda_strategy = Column(String(50))
@@ -165,7 +168,7 @@ class QAResult(Base):
 
 class QuboRunStats(Base):
     __tablename__ = 'qubo_run_stats'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    qubo_run_stats_id = Column(Integer, primary_key=True, autoincrement=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     filtering_percentage = Column(Float, nullable=True)
@@ -176,7 +179,7 @@ class QuboRunStats(Base):
 class CongestionSummary(Base):
     """Stores per-edge congestion results for all, post-QA, shortest-duration, and shortest-distance congestion."""
     __tablename__ = 'congestion_summary'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    congestion_summary_id = Column(Integer, primary_key=True, autoincrement=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     edge_id = Column(Integer, nullable=False)
@@ -189,12 +192,15 @@ class CongestionSummary(Base):
 class SelectedRoute(Base):
     """SelectedRoute table: stores the routes selected by QA optimization for each vehicle."""
     __tablename__ = 'selected_routes'
-    id = Column(Integer, primary_key=True, autoincrement=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     vehicle_id = Column(Integer, nullable=False)
     route_id = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
 
 # Create all tables if they do not exist
 Base.metadata.create_all(engine)
