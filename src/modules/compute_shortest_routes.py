@@ -30,28 +30,39 @@ def compute_shortest_routes(
     assert method in ("duration", "distance"), "Method must be 'duration' or 'distance'"
     try:
         sql = sa_text(f"""
-            WITH shortest_routes AS (
-                SELECT vehicle_id, MIN({method}) AS min_value
+            WITH 
+            filtered_vehicle_routes AS (
+                SELECT vehicle_id, route_id, {method}
                 FROM vehicle_routes
-                WHERE run_configs_id = :run_config_id AND iteration_id = :iteration_id
+                WHERE run_configs_id = :run_config_id 
+                AND iteration_id = :iteration_id
+            ),
+            shortest_routes AS (
+                SELECT vehicle_id, MIN({method}) AS min_value
+                FROM filtered_vehicle_routes
                 GROUP BY vehicle_id
             ),
             shortest_selected_routes AS (
-                SELECT vr.vehicle_id, MAX(vr.route_id) AS route_id
-                FROM vehicle_routes vr
+                SELECT fvr.vehicle_id, MAX(fvr.route_id) AS route_id
+                FROM filtered_vehicle_routes fvr
                 JOIN shortest_routes sr
-                ON vr.vehicle_id = sr.vehicle_id AND vr.{method} = sr.min_value
-                WHERE vr.run_configs_id = :run_config_id AND vr.iteration_id = :iteration_id
-                GROUP BY vr.vehicle_id
+                ON fvr.vehicle_id = sr.vehicle_id AND fvr.{method} = sr.min_value
+                GROUP BY fvr.vehicle_id
+            ),
+            filtered_congestion AS (
+                SELECT edge_id, vehicle1, vehicle1_route, vehicle2, vehicle2_route, congestion_score
+                FROM trafficOptimization.congestion_map
+                WHERE run_configs_id = :run_config_id 
+                AND iteration_id = :iteration_id
             )
-            SELECT cm.edge_id, SUM(cm.congestion_score) AS congestion_score
-            FROM trafficOptimization.congestion_map cm
+            SELECT 
+                cm.edge_id, 
+                SUM(cm.congestion_score) AS congestion_score
+            FROM filtered_congestion cm
             JOIN shortest_selected_routes sr1 
                 ON sr1.vehicle_id = cm.vehicle1 AND sr1.route_id = cm.vehicle1_route
             JOIN shortest_selected_routes sr2 
                 ON sr2.vehicle_id = cm.vehicle2 AND sr2.route_id = cm.vehicle2_route
-            WHERE cm.run_configs_id = :run_config_id
-            AND cm.iteration_id = :iteration_id
             GROUP BY cm.edge_id;
         """)
         result = session.execute(sql, {

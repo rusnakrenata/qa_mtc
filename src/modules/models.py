@@ -20,10 +20,14 @@ except Exception as e:
 class City(Base):
     """City table: stores city metadata."""
     __tablename__ = 'cities'
-    id = Column(Integer, primary_key=True)
+    city_id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     node_count = Column(Integer)
     edge_count = Column(Integer)
+    center_lat = Column(Numeric(9, 6), nullable=True)  # Center latitude for city subset
+    center_lon = Column(Numeric(9, 6), nullable=True)  # Center longitude for city subset
+    radius_km = Column(Float, nullable=True)  # Radius in km for city subset
+    is_subset = Column(Boolean, default=False)  # Whether this is a city subset
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Node(Base):

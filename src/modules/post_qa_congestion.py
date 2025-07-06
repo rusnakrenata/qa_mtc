@@ -108,26 +108,33 @@ def post_qa_congestion(
 
         # Now run your main query using session
         result = session.execute(sa_text(f"""
-           SELECT 
+            WITH 
+            filtered_routes AS (
+                SELECT vehicle_id, route_id
+                FROM trafficOptimization.selected_routes
+                WHERE run_configs_id = :run_configs_id 
+                AND iteration_id = :iteration_id
+            ),
+            filtered_congestion AS (
+                SELECT edge_id, vehicle1, vehicle1_route, vehicle2, vehicle2_route, congestion_score
+                FROM trafficOptimization.congestion_map
+                WHERE run_configs_id = :run_configs_id 
+                AND iteration_id = :iteration_id
+            )
+            SELECT 
                 cm.edge_id, 
                 SUM(cm.congestion_score) AS congestion_score
-            FROM trafficOptimization.congestion_map cm
-            JOIN trafficOptimization.selected_routes sr1 
+            FROM filtered_congestion cm
+            JOIN filtered_routes sr1 
                 ON sr1.vehicle_id = cm.vehicle1 AND sr1.route_id = cm.vehicle1_route
-            JOIN trafficOptimization.selected_routes sr2 
+            JOIN filtered_routes sr2 
                 ON sr2.vehicle_id = cm.vehicle2 AND sr2.route_id = cm.vehicle2_route
-            WHERE cm.run_configs_id = :run_configs_id 
-            AND cm.iteration_id = :iteration_id
-            AND sr1.run_configs_id = :run_configs_id
-            AND sr1.iteration_id = :iteration_id
-            AND sr2.run_configs_id = :run_configs_id
-            AND sr2.iteration_id = :iteration_id
             GROUP BY cm.edge_id;
         """), {'run_configs_id': run_configs_id, 'iteration_id': iteration_id})
         rows = list(result.fetchall())
         # Optionally, drop the table at the end:
         # session.execute(sa_text("DROP TABLE selected_routes"))
-        # session.commit()
+        session.commit()
 
         logger.info(f"Recomputed QA congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
         return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score']))

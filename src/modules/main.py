@@ -54,17 +54,43 @@ def create_db_session() -> Any:
 
 def get_or_create_city(session) -> Any:
     """Get or create the city in the database."""
-    city = session.query(City).filter_by(name=CITY_NAME).first()
-    if not city:
-        nodes, edges = get_city_graph(CITY_NAME)
-        city = store_city_to_db(session, CITY_NAME, nodes, edges, City, Node, Edge)
+    # Check if we're looking for a city subset or full city
+    if CENTER_COORDS is not None:
+        # Look for existing city subset with matching coordinates
+        lat, lon = CENTER_COORDS  # type: ignore
+        city = session.query(City).filter_by(
+            name=CITY_NAME,
+            center_lat=lat,
+            center_lon=lon,
+            is_subset=True
+        ).first()
+        
+        if not city:
+            # Create new city subset
+            nodes, edges = get_city_graph(CITY_NAME, center_coords=CENTER_COORDS, radius_km=1.0)
+            city = store_city_to_db(
+                session, CITY_NAME, nodes, edges, City, Node, Edge,
+                center_coords=CENTER_COORDS, radius_km=1.0
+            )
+    else:
+        # Look for existing full city
+        city = session.query(City).filter_by(
+            name=CITY_NAME,
+            is_subset=False
+        ).first()
+        
+        if not city:
+            # Create new full city
+            nodes, edges = get_city_graph(CITY_NAME)
+            city = store_city_to_db(session, CITY_NAME, nodes, edges, City, Node, Edge)
+    
     return city
 
 
 def get_or_create_run_config_for_city(session, city) -> Any:
     """Get or create a run configuration for the city."""
     return get_or_create_run_config(
-        session, city.id, RunConfig, N_VEHICLES, K_ALTERNATIVES,
+        session, city.city_id, RunConfig, N_VEHICLES, K_ALTERNATIVES,
         MIN_LENGTH, MAX_LENGTH, TIME_STEP, TIME_WINDOW
     )
 
@@ -290,7 +316,7 @@ def main() -> None:
         with create_db_session() as session:
             logger.info("Starting workflow at: %s", start_time)
             city = get_or_create_city(session)
-            nodes, edges = get_city_data_from_db(session, city.id)
+            nodes, edges = get_city_data_from_db(session, city.city_id)
             if not isinstance(edges, gpd.GeoDataFrame):
                 edges = gpd.GeoDataFrame(edges)
             run_config = get_or_create_run_config_for_city(session, city)
