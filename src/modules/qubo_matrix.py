@@ -11,34 +11,32 @@ import math
 logger = logging.getLogger(__name__)
 
 def qubo_matrix(
+    n_vehicles: int,
     t: int,
     congestion_df: pd.DataFrame,
     w_df: pd.DataFrame,
     vehicle_routes_df: pd.DataFrame,
     lambda_strategy: str = "normalized",
-    fixed_lambda: float = 1.0,
-    filtering_percentage: Optional[float] = None,
-    target_size: float = 1000.0,
-    R: float = 10.0
-) -> Tuple[Dict[Tuple[int, int], float], List[Any], pd.DataFrame]:
+    fixed_lambda: Optional[float] = None,
+    filtering_percentage: float = 0.25
+) -> Tuple[Dict[Tuple[int, int], float], List[Any], pd.DataFrame, float]:
     """
     Constructs the QUBO dictionary for the traffic assignment problem with 4D weights.
     Args:
+        n_vehicles: Number of vehicles
         t: Number of route alternatives per vehicle
         congestion_df: Congestion DataFrame (for filtering)
         w_df: Congestion weights DataFrame
         vehicle_routes_df: Vehicle routes DataFrame
         lambda_strategy: "normalized" or "max_weight"
         fixed_lambda: λ if using normalized strategy
-        filtering_percentage: Float (e.g., 0.1) to select a subset of vehicles
-        R: Penalty multiplier for non-existent routes
     Returns:
         Q: QUBO matrix as a dictionary {(q1, q2): value}
         vehicle_ids_filtered: The filtered list of vehicle IDs used in QUBO
     """
     start_time = time.time()
     logger.info("Starting QUBO vehicle filtering...")
-    vehicle_ids_filtered, affected_edges_df = select_vehicles_by_leiden_joined_clusters(congestion_df,target_size=6250, resolution=0.7)
+    vehicle_ids_filtered, affected_edges_df = select_vehicles_by_leiden_joined_clusters(congestion_df,target_size=n_vehicles*filtering_percentage, resolution=0.7)
     #select_vehicles_simple(congestion_df)  #select_vehicles_by_cumulative_congestion(congestion_df, filtering_percentage or 1.0)
     n_filtered = len(vehicle_ids_filtered)
     logger.info(f"Vehicle filtering complete. {n_filtered} vehicles selected. Time elapsed: {time.time() - start_time:.2f}s")
@@ -46,19 +44,16 @@ def qubo_matrix(
     logger.info("Computing congestion weights for filtered vehicles...")
     weights_start = time.time()
     if lambda_strategy == "normalized":
-        w, max_w = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, round(R * math.sqrt(n_filtered), 7))
-
-        lambda_penalty = round(math.sqrt(n_filtered) * fixed_lambda, 7)
-        logger.info(f"Using normalized weights with fixed lambda_penalty={lambda_penalty}")
+        w, max_w = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df)
+        logger.info(f"Using normalized weights max_w={max_w}")
     else:
-        w, max_w = congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df, R)
-        lambda_penalty = max_w
-        logger.info(f"Using max_weight strategy with lambda_penalty={lambda_penalty:.6f}")
+        w, max_w = congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df)
+        logger.info(f"Using max_weight strategy max_w={max_w}")
     logger.info(f"Congestion weights computed. Time elapsed: {time.time() - weights_start:.2f}s")
 
     # Build set of valid (vehicle, route) pairs
     valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
-    print(valid_pairs)
+
     logger.info("Constructing QUBO matrix...")
     qubo_start = time.time()
     Q = defaultdict(float)
@@ -90,10 +85,10 @@ def qubo_matrix(
                 # Non-real route: use high penalty 
                 q_indices.append(q)
                 not_real_routes_indices.append(q)
-    print('dynamic penaltiess')
-    print(dynamic_penalties)
+
     # Step 2: Find the maximum penalty for real routes
     lambda_penalty = max(dynamic_penalties) 
+    logger.info(f"lambda_penalty={lambda_penalty}")
 
     # Step 3: Apply the max penalty to all diagonal elements
     for q in q_indices:
@@ -113,4 +108,4 @@ def qubo_matrix(
 
     logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")
     logger.info(f"Total QUBO matrix function time: {time.time() - start_time:.2f}s")
-    return dict(Q), vehicle_ids_filtered, affected_edges_df    
+    return dict(Q), vehicle_ids_filtered, affected_edges_df, lambda_penalty

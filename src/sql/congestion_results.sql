@@ -1,25 +1,52 @@
-select n_vehicles, lambda_value,assignment_valid
-from trafficOptimization.qa_results qr 
-where run_configs_id = %s and iteration_id = %s;
-select sum(congestion_all) as congestion_all, sum(congestion_post_qa) as congestion_post_qa, 
-sum(congestion_shortest_dis ) as congestion_shortest_dist, sum(congestion_shortest_dur ) as congestion_shortest_dur,
-(sum(congestion_shortest_dur)- sum(congestion_post_qa )) /  sum(congestion_shortest_dur) * 100 as pct_qa_improvement
-from trafficOptimization.congestion_summary cs 
-where run_configs_id  =%s and iteration_id  =%s;
+SELECT 
+    n_vehicles, 
+    lambda_value, 
+    assignment_valid, 
+    invalid_assignment_vehicles,
+    dwave_constraints_check
+FROM trafficOptimization.qa_results qr
+WHERE run_configs_id = %s 
+  AND iteration_id = %s;
+SELECT 
+    SUM(congestion_all) AS congestion_all, 
+    SUM(congestion_post_qa) AS congestion_post_qa, 
+    SUM(congestion_shortest_dis) AS congestion_shortest_dist, 
+    SUM(congestion_shortest_dur) AS congestion_shortest_dur,
+    SUM(congestion_random) AS congestion_random,
+    (SUM(congestion_shortest_dur) - SUM(congestion_post_qa)) / SUM(congestion_shortest_dur) * 100 AS pct_qa_shortest_dur_improvement,
+    (SUM(congestion_random) - SUM(congestion_shortest_dur)) / SUM(congestion_random) * 100 AS pct_qa_random__improvement
+FROM trafficOptimization.congestion_summary cs
+WHERE run_configs_id = %s 
+  AND iteration_id = %s;
 WITH shortest_routes AS (
-    SELECT vehicle_id, min(duration) AS min_value, run_configs_id, iteration_id
+    SELECT 
+        vehicle_id, 
+        MIN(duration) AS min_value, 
+        run_configs_id, 
+        iteration_id
     FROM vehicle_routes
-    WHERE run_configs_id = %s AND iteration_id = %s
+    WHERE run_configs_id = %s 
+      AND iteration_id = %s
     GROUP BY vehicle_id, run_configs_id, iteration_id
 ),
 selected_routes AS (
-    SELECT vr.vehicle_id, max(vr.route_id) as route_id, ss.route_id as qa_route_id 
+    SELECT 
+        vr.vehicle_id, 
+        MAX(vr.route_id) AS route_id, 
+        ss.route_id AS qa_route_id 
     FROM vehicle_routes vr
     JOIN shortest_routes sr
-    inner join selected_routes ss on sr.vehicle_id = ss.vehicle_id
-    ON vr.vehicle_id = sr.vehicle_id AND vr.duration = sr.min_value
-    WHERE vr.run_configs_id = sr.run_configs_id AND vr.iteration_id = sr.iteration_id
+        ON vr.vehicle_id = sr.vehicle_id 
+        AND vr.duration = sr.min_value
+    INNER JOIN selected_routes ss 
+        ON sr.vehicle_id = ss.vehicle_id
+    WHERE vr.run_configs_id = sr.run_configs_id 
+      AND vr.iteration_id = sr.iteration_id
     GROUP BY vr.vehicle_id, ss.route_id
 )
-SELECT vehicle_id, route_id, qa_route_id FROM selected_routes
-where route_id <> qa_route_id;
+SELECT 
+    vehicle_id, 
+    route_id, 
+    qa_route_id 
+FROM selected_routes
+WHERE route_id <> qa_route_id;

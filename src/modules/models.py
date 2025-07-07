@@ -164,6 +164,8 @@ class QAResult(Base):
     energy = Column(Float)
     duration = Column(Float)
     qubo_path = Column(String(255))
+    invalid_assignment_vehicles = Column(String(2000), nullable=True)
+    dwave_constraints_check = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class QuboRunStats(Base):
@@ -187,6 +189,7 @@ class CongestionSummary(Base):
     congestion_post_qa = Column(Float, nullable=True)
     congestion_shortest_dur = Column(Float, nullable=True)
     congestion_shortest_dis = Column(Float, nullable=True)
+    congestion_random = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class SelectedRoute(Base):
@@ -200,6 +203,19 @@ class SelectedRoute(Base):
     __table_args__ = (
         PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
         Index('idx_run_iter_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+class RandomRoute(Base):
+    """SelectedRoute table: stores the routes selected by QA optimization for each vehicle."""
+    __tablename__ = 'random_routes'
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_random_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
     )
 
 # Create all tables if they do not exist

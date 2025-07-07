@@ -13,6 +13,7 @@ from plot_congestion_heatmap import plot_congestion_heatmap_interactive
 from get_congestion_weights import get_congestion_weights
 from qubo_matrix import qubo_matrix
 from compute_shortest_routes import compute_shortest_routes
+from compute_random_routes import compute_random_routes
 from post_qa_congestion import post_qa_congestion
 from qa_testing import qa_testing
 from datetime import datetime
@@ -40,6 +41,7 @@ AFFECTED_EDGES_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "affected_edges_heatmap.html
 SHORTEST_DUR_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dur_congestion_heatmap.html"
 SHORTEST_DIS_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dis_congestion_heatmap.html"
 POST_QA_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "post_qa_congestion_heatmap.html"
+RANDOM_ROUTES_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "random_routes_congestion_heatmap.html"
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -127,7 +129,7 @@ def compute_and_store_congestion(session, run_configs_id, iteration_id) -> pd.Da
     """Compute congestion and store in the database."""
     logger.info("Compute congestion at: %s", datetime.now())
     congestion_df = generate_congestion(
-        session, CongestionMap,
+        session,
         run_configs_id, iteration_id,
         DIST_THRESH, SPEED_DIFF_THRESH
     )
@@ -154,19 +156,15 @@ def build_and_save_qubo_matrix(
     iteration_id: int,
     t: int,
     lambda_strategy: str,
-    fixed_lambda: float,
-    filtering_percentage: float,
-    target_size: float,
-    R: float = R_VALUE
-) -> Tuple[Any, List[Any], pd.DataFrame]:
+    fixed_lambda: Optional[float] = None,
+    filtering_percentage: float = 0.25
+) -> Tuple[Any, List[Any], pd.DataFrame, float]:
     """Build QUBO matrix and save run stats."""
-    Q, filtered_vehicle_ids, affected_edges_df = qubo_matrix(
-        t, congestion_df, weights_df, vehicle_routes_df,
+    Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = qubo_matrix(
+        N_VEHICLES, t, congestion_df, weights_df, vehicle_routes_df,
         lambda_strategy=lambda_strategy,
         fixed_lambda=fixed_lambda,
-        filtering_percentage=filtering_percentage,
-        target_size=target_size,
-        R=R
+        filtering_percentage=filtering_percentage
     )
     # Find the matrix size
     max_index = 0
@@ -193,13 +191,13 @@ def build_and_save_qubo_matrix(
     stats = QuboRunStats(
         run_configs_id=run_configs_id,
         iteration_id=iteration_id,
-        filtering_percentage=filtering_percentage,
+        filtering_percentage=N_FILTERED/N_VEHICLES,
         n_vehicles=N_VEHICLES,
         n_filtered_vehicles=N_FILTERED
     )
     session.add(stats)
     session.commit()
-    return Q, filtered_vehicle_ids, affected_edges_df
+    return Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty
 
 
 def visualize_and_save_congestion(
@@ -208,13 +206,15 @@ def visualize_and_save_congestion(
     affected_edges_df: pd.DataFrame,
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
-    post_qa_congestion_df: pd.DataFrame
+    post_qa_congestion_df: pd.DataFrame,
+    random_routes_df: pd.DataFrame
 ) -> None:
     """Visualize congestion and save heatmaps."""
     all_scores = pd.concat([
         shortest_routes_dur_df['congestion_score'],
         shortest_routes_dis_df['congestion_score'],
-        post_qa_congestion_df['congestion_score']
+        post_qa_congestion_df['congestion_score'],
+        random_routes_df['congestion_score']
     ])
     vmin = float(all_scores.min())
     vmax = float(all_scores.max())
@@ -233,6 +233,9 @@ def visualize_and_save_congestion(
     plot_map_post_qa = plot_congestion_heatmap_interactive(edges, post_qa_congestion_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_post_qa is not None:
         plot_map_post_qa.save(POST_QA_HEATMAP_FILENAME)
+    plot_map_random = plot_congestion_heatmap_interactive(edges, random_routes_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
+    if plot_map_random is not None:
+        plot_map_random.save(RANDOM_ROUTES_HEATMAP_FILENAME)
 
 
 def save_congestion_summary(
@@ -242,6 +245,7 @@ def save_congestion_summary(
     post_qa_congestion_df: pd.DataFrame,
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
+    random_routes_df: pd.DataFrame,
     run_config: RunConfig,
     iteration_id: int
 ) -> None:
@@ -252,6 +256,7 @@ def save_congestion_summary(
     merged = merged.merge(post_qa_congestion_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_qa'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dur_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dur'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dis_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dis'}), on='edge_id', how='left')  # type: ignore
+    merged = merged.merge(random_routes_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_random'}), on='edge_id', how='left')  # type: ignore
     merged = merged.fillna(0)
     records = [
         CongestionSummary(
@@ -261,7 +266,8 @@ def save_congestion_summary(
             congestion_all=float(row['congestion_all']),
             congestion_post_qa=float(row['congestion_post_qa']),
             congestion_shortest_dur=float(row['congestion_shortest_dur']),
-            congestion_shortest_dis=float(row['congestion_shortest_dis'])
+            congestion_shortest_dis=float(row['congestion_shortest_dis']),
+            congestion_random=float(row['congestion_random'])
         )
         for _, row in merged.iterrows()
     ]
@@ -289,6 +295,7 @@ def run_congestion_results_sql(session, run_configs_id, iteration_id):
 def check_bqm_against_solver_limits(Q):
     import dimod
     from dwave.system import LeapHybridBQMSampler
+    dwave_constraints_check= True
     bqm = dimod.BQM.from_qubo(Q)
     num_variables = len(bqm.variables)
     num_linear = len(bqm.linear)
@@ -304,9 +311,12 @@ def check_bqm_against_solver_limits(Q):
     print("Solver maximum_number_of_variables:", max_vars)
     print("Solver maximum_number_of_biases:", max_biases)
     if num_variables > max_vars:
-        raise ValueError("Too many variables for this solver!")
+        dwave_constraints_check = False
+        logger.warning("Too many variables for this solver!")
     if num_biases > max_biases:
-        raise ValueError("Too many biases for this solver!")
+        dwave_constraints_check = False
+        logger.warning("Too many biases for this solver!")
+    return dwave_constraints_check
 
 
 def main() -> None:
@@ -334,14 +344,16 @@ def main() -> None:
 
             # QUBO matrix
             t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
-            Q, filtered_vehicle_ids, affected_edges_df = build_and_save_qubo_matrix(
+            Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = build_and_save_qubo_matrix(
                 vehicle_routes_df, congestion_df, weights_df, session, run_config.run_configs_id, iteration_id, t,
-                LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE, N_VEHICLES//10,
-                R_VALUE
+                LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE
             )
 
             # Before QA testing, check BQM/QUBO limits
-            check_bqm_against_solver_limits(Q)
+            dwave_constraints_check = check_bqm_against_solver_limits(Q)
+            if not dwave_constraints_check:
+                logger.warning("BQM/QUBO constraints check failed! Exiting workflow.")
+                return
 
             # QA testing
             qa_result = qa_testing(
@@ -353,13 +365,13 @@ def main() -> None:
                 t=t,
                 vehicle_ids=filtered_vehicle_ids,
                 lambda_strategy=LAMBDA_STRATEGY,
-                lambda_value=LAMBDA_VALUE,
+                lambda_value=lambda_penalty,
                 comp_type=COMP_TYPE,
                 num_reads=10,
-                vehicle_routes_df=vehicle_routes_df
+                vehicle_routes_df=vehicle_routes_df,
+                dwave_constraints_check=dwave_constraints_check
             )
             qa_assignment = qa_result['assignment']
-            logger.info(f"QA assignment: {qa_assignment}")
 
             # Post-QA congestion
             post_qa_congestion_df = post_qa_congestion(
@@ -372,16 +384,15 @@ def main() -> None:
                 method=ROUTE_METHOD
             )
             post_qa_congestion_df = post_qa_congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
-            if not isinstance(post_qa_congestion_df, pd.DataFrame):
-                post_qa_congestion_df = pd.DataFrame(post_qa_congestion_df)
-            logger.info(f"Post-QA congestion result: {post_qa_congestion_df}")
+            post_qa_congestion_df = pd.DataFrame(post_qa_congestion_df)
 
+            random_routes_df = compute_random_routes(session, run_config.run_configs_id, iteration_id)
             shortest_routes_dur_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="duration")
             shortest_routes_dis_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="distance")
             # I changed the congestion_df to affected_edges_df - from leiden clustering
-            visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df)
+            visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df)
 
-            save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, run_config, iteration_id)
+            save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, run_config, iteration_id)
             run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 
             logger.info("Workflow completed successfully!")

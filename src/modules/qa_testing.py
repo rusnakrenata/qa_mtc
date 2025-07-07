@@ -46,7 +46,8 @@ def qa_testing(
     lambda_value=None,
     comp_type: str = 'hybrid',
     num_reads: int = 10,
-    vehicle_routes_df=None
+    vehicle_routes_df=None,
+    dwave_constraints_check=True
 ) -> Dict[str, Any]:
     """
     Run QUBO formulation for the car-to-trase assignment using a specified quantum/classical sampler.
@@ -99,8 +100,7 @@ def qa_testing(
         logger.error(f"Unknown comp_type: {comp_type}")
         raise ValueError(f"Unknown comp_type: {comp_type}")
     duration_qa = time.perf_counter() - start_time
-    logger.info("QA testing completed. Response: %s, duration: %s", response, duration_qa)
-    
+   
 
     # --- Process results ---
     record = response.first
@@ -114,19 +114,13 @@ def qa_testing(
     if vehicle_routes_df is None or vehicle_ids is None:
         raise ValueError("vehicle_routes_df and vehicle_ids must not be None for assignment validity check.")
 
-    assignment_valid = True
+    invalid_assignment_vehicles = []
     for i, vehicle_id in enumerate(vehicle_ids):
-        # Get assignment for all routes for this vehicle
         assignment_slice = assignment[i * t : (i + 1) * t]
-        # Check if exactly one route is selected (one-hot constraint)
         if assignment_slice.count(1) != 1:
-            assignment_valid = False
-           # logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assignment: {assignment_slice}")
-            break
-        else:
-            # Find which route was selected (0-based index)
-            selected_route_index = assignment_slice.index(1)
-          #  logger.info(f"Vehicle {vehicle_id} assigned to route {selected_route_index + 1} (index {selected_route_index})")
+            invalid_assignment_vehicles.append(vehicle_id)
+    assignment_valid = len(invalid_assignment_vehicles) == 0
+    invalid_assignment_vehicles_str = ",".join(str(v) for v in invalid_assignment_vehicles)
 
     # --- Save QUBO matrix to file ---
     def save_qubo(Q, filepath):
@@ -149,13 +143,14 @@ def qa_testing(
         num_reads=num_reads,
         n_vehicles=n,
         k_alternatives=t,
-       # weights=weights,
         vehicle_ids=vehicle_ids,
         assignment_valid=int(assignment_valid),
         assignment=assignment,
         energy=energy,
         duration=duration_qa,
         qubo_path=str(filepath),
+        invalid_assignment_vehicles=invalid_assignment_vehicles_str,
+        dwave_constraints_check=dwave_constraints_check,
         created_at=datetime.datetime.utcnow()
     )
     session.add(result_record)
@@ -175,6 +170,5 @@ def qa_testing(
         'duration': duration_qa,
         'lambda_strategy': lambda_strategy,
         'lambda_value': lambda_value,
-        #'weights': weights,
         'vehicle_ids': vehicle_ids
     }

@@ -9,7 +9,6 @@ def get_invalid_vehicle_route_pairs(vehicle_routes_df: pd.DataFrame,  t: int) ->
     """
     Returns a set of (vehicle_id, route_id) pairs that are invalid (i.e., route_id does not exist for that vehicle).
     """
-    valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
     vehicle_ids = vehicle_routes_df['vehicle_id'].unique()
     invalid_pairs = set()
     for vid in vehicle_ids:
@@ -24,18 +23,16 @@ def congestion_weights(
     n: int,
     t: int,
     vehicle_ids: List[Any],
-    vehicle_routes_df: pd.DataFrame,
-    R: float = 10.0
+    vehicle_routes_df: pd.DataFrame
 ) -> Tuple[List[List[List[List[float]]]], float]:
     """
     Constructs the 4D congestion weight matrix with strong penalization for non-existent routes.
     Args:
         weights_df: DataFrame with columns ['vehicle1', 'vehicle2', 'vehicle1_route', 'vehicle2_route', 'weighted_congestion_score']
-        n: Number of vehicles
+        n_vehicles: Number of vehicles
         t: Number of route alternatives per vehicle
         vehicle_ids: List of vehicle IDs
         vehicle_routes_df: DataFrame with columns ['vehicle_id', 'route_id']
-        R: Penalty multiplier for non-existent routes
     Returns:
         w: 4D list of congestion weights
         w_max: Maximum weight value
@@ -78,5 +75,5 @@ def congestion_weights(
                         w[i, j, k1, k2] = 0.0
                     elif (pair1 in invalid_pairs) or (pair2 in invalid_pairs):
                         w[i, j, k1, k2] = 0.0
-    logger.info(f"w_max = {w_max}, penalty R = {R}, invalid pairs: {len(invalid_pairs)}, invalid pairs: {invalid_pairs}")
+    logger.info(f"w_max = {w_max}, invalid pairs: {len(invalid_pairs)}, invalid pairs: {invalid_pairs}")
     return w.tolist(), w_max

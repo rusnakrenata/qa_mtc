@@ -1,5 +1,4 @@
 import time
-import os
 import asyncio
 import aiohttp
 import nest_asyncio
@@ -15,8 +14,6 @@ from datetime import datetime
 from sqlalchemy import insert, text
 import logging
 from typing import Any
-import requests
-import json
 import multiprocessing
 
 from utils import (

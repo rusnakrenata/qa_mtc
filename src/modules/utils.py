@@ -12,7 +12,6 @@ from scipy.spatial import cKDTree # type: ignore
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import osmnx as ox
-import datetime
 import logging
 from typing import Any, List, Tuple, Dict, Optional
 
@@ -71,21 +70,6 @@ def bearing_to_cardinal(bearing: float) -> str:
     return directions[ix]
 
 
-def find_closest_osm_edge_2(lat: float, lng: float, edge_tree: Any, transformer: Optional[Any] = None, geometry_to_id: Optional[Dict[Any, Any]] = None) -> Dict[str, Any]:
-    """Find the closest OSM edge using a spatial index and transformer."""
-    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
-    point = Point(x, y)
-    geometry, dist = edge_tree.query_nearest(point, return_distance=True)
-    if isinstance(geometry, np.ndarray):
-        geometry = geometry.item()
-    edge_id = geometry_to_id.get(geometry, None) if geometry_to_id is not None else None
-    return {
-        'id': edge_id,
-        'geometry': geometry,
-        'distance_meters': dist
-    }
-
-
 def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, edge_tree: Any, transformer: Optional[Any] = None) -> Dict[str, Any]:
     """Find the closest OSM edge using a GeoDataFrame and spatial index."""
     x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
@@ -96,18 +80,6 @@ def find_closest_osm_edge(lat: float, lng: float, edges_gdf: gpd.GeoDataFrame, e
         'id': edge_row.get('edge_id', None),
         'geometry': edge_row.geometry,
         'distance_meters': 0
-    }
-
-
-def find_approx_nearest_edge(lat: float, lng: float, edges_gdf_proj: gpd.GeoDataFrame, kdtree: Any, transformer: Any) -> Dict[str, Any]:
-    """Find the nearest edge using a projected GeoDataFrame and KDTree."""
-    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
-    dist, idx = kdtree.query([x, y])
-    edge_row = edges_gdf_proj.iloc[idx]
-    return {
-        'id': edge_row.get('id', None),
-        'geometry': edge_row.geometry,
-        'distance_meters': dist
     }
 
 
@@ -182,8 +154,6 @@ def normalize_valhalla_route(route, route_index=0):
 
 
 async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of_alternative_routes):
-
-
     base_url = "http://147.232.204.254:8002/route"
     payload = {
         "locations": [{"lat": origin[1], "lon": origin[0]}, {"lat": destination[1], "lon": destination[0]}],
@@ -192,8 +162,6 @@ async def async_get_routes_from_valhalla(session, origin, destination, max_nr_of
         "alternates": max_nr_of_alternative_routes > 1,
         "number_of_alternates": max_nr_of_alternative_routes - 1 if max_nr_of_alternative_routes > 1 else 0
     }
-    
-
     async with session.post(base_url, json=payload) as response:
         if response.status == 200:
             data = await response.json()
@@ -216,43 +184,5 @@ def convert_valhalla_leg_to_google_like_steps(leg):
         steps.append(step)
     return steps
 
-
-######################### 
-def build_edge_indices(edges_gdf):
-    # Compute centroids of edges for cKDTree
-    centroids = edges_gdf.geometry.centroid
-    centroid_coords = np.array([[pt.x, pt.y] for pt in centroids])
-    ckdtree = cKDTree(centroid_coords)
-
-    # Build STRtree for refinement
-    edge_geoms = edges_gdf.geometry.tolist()
-    strtree = STRtree(edge_geoms)
-
-    # Map geometry back to index in edges_gdf
-    geom_to_index = {geom: idx for idx, geom in enumerate(edge_geoms)}
-    return ckdtree, strtree, geom_to_index, centroid_coords
-
-
-def find_nearest_edge_hybrid(lat, lng, transformer, edges_gdf,
-                              ckdtree, strtree, geom_to_index,
-                              centroid_coords, k=5):
-    # Transform lat/lng to projected x, y
-    x, y = transformer.transform(lng, lat) if transformer is not None else (lng, lat)
-    query_point = Point(x, y)
-
-    # Step 1: Fast k-NN centroid lookup using cKDTree
-    dists, indices = ckdtree.query([x, y], k=k)
-
-    # Step 2: Refine with STRtree using true distance to geometry
-    candidate_geometries = [edges_gdf.geometry.iloc[i] for i in indices]
-    nearest_geom = min(candidate_geometries, key=lambda geom: query_point.distance(geom))
-    final_index = geom_to_index[nearest_geom]
-    edge_row = edges_gdf.iloc[final_index]
-
-    return {
-        'id': edge_row.get('id', None),
-        'geometry': edge_row.geometry,
-        'distance_meters': query_point.distance(nearest_geom)
-    }
 
 

@@ -36,9 +36,24 @@ def post_qa_congestion(
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
             assignment = qa_assignment[num_routes * idx : num_routes * (idx + 1)]
             if assignment.count(1) != 1:
-                # raise ValueError(f"Invalid assignment {assignment} for vehicle {vehicle_id}: not one-hot.")
-                logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Defaulting to first route.")
-                route_id = 1  # Default to first route
+                # Assign the shortest route based on the method (duration or distance)
+                sql = sa_text(f'''
+                    SELECT route_id FROM vehicle_routes
+                    WHERE vehicle_id = :vehicle_id AND run_configs_id = :run_configs_id AND iteration_id = :iteration_id
+                    ORDER BY {method} ASC LIMIT 1
+                ''')
+                result = session.execute(sql, {
+                    'vehicle_id': vehicle_id,
+                    'run_configs_id': run_configs_id,
+                    'iteration_id': iteration_id
+                })
+                row = result.fetchone()
+                if row is not None:
+                    route_id = row.route_id
+                    logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assigned shortest route {route_id}.")
+                else:
+                    route_id = 1  # fallback if no route found
+                    logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assigned first route {route_id}.")                
             else:
                 route_id = assignment.index(1) + 1  # 1-based route_id
             vehicle_route_pairs.append((vehicle_id, route_id))
