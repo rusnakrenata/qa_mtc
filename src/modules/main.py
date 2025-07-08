@@ -33,15 +33,16 @@ from config import *
 
 # Named constants
 OFFSET_DEG = 0.0000025
-QUBO_OUTPUT_DIR = Path("files")
+QUBO_OUTPUT_DIR = Path("files_csv")
+MAPS_OUTPUT_DIR = Path("files_html")
 QUBO_MATRIX_FILENAME = QUBO_OUTPUT_DIR / "qubo_matrix.csv"
 CONGESTION_WEIGHTS_FILENAME = QUBO_OUTPUT_DIR / "congestion_weights.csv"
-CONGESTION_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "congestion_heatmap.html"
-AFFECTED_EDGES_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "affected_edges_heatmap.html"
-SHORTEST_DUR_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dur_congestion_heatmap.html"
-SHORTEST_DIS_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "shortest_routes_dis_congestion_heatmap.html"
-POST_QA_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "post_qa_congestion_heatmap.html"
-RANDOM_ROUTES_HEATMAP_FILENAME = QUBO_OUTPUT_DIR / "random_routes_congestion_heatmap.html"
+CONGESTION_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "congestion_heatmap.html"
+AFFECTED_EDGES_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "affected_edges_heatmap.html"
+SHORTEST_DUR_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "shortest_routes_dur_congestion_heatmap.html"
+SHORTEST_DIS_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "shortest_routes_dis_congestion_heatmap.html"
+POST_QA_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "post_qa_congestion_heatmap.html"
+RANDOM_ROUTES_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "random_routes_congestion_heatmap.html"
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
