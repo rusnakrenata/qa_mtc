@@ -218,6 +218,20 @@ class RandomRoute(Base):
         Index('idx_run_iter_random_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
     )
 
+class DistDurSummary(Base):
+    """Stores summary statistics for distance and duration for shortest, post-QA, and random routes."""
+    __tablename__ = 'dist_dur_summary'
+    dist_dur_summary_id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    shortest_dist = Column(Float, nullable=True)
+    shortest_dur = Column(Float, nullable=True)
+    post_qa_dist = Column(Float, nullable=True)
+    post_qa_dur = Column(Float, nullable=True)
+    rnd_dist = Column(Float, nullable=True)
+    rnd_dur = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 # Create all tables if they do not exist
 Base.metadata.create_all(engine)
 

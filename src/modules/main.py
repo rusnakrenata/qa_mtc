@@ -276,6 +276,36 @@ def save_congestion_summary(
     session.commit()
 
 
+def save_dist_dur_summary(session, run_configs_id, iteration_id):
+    """Save distance and duration summary to the database using dist_dur_results.sql."""
+    import os
+    from models import DistDurSummary
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sql_file = os.path.join(base_dir, 'sql', 'dist_dur_results.sql')
+    with open(sql_file, 'r') as f:
+        sql = f.read()
+    # Replace %s placeholders with :run_configs_id and :iteration_id for SQLAlchemy
+    sql = sql.replace('%s', ':run_configs_id', 1)
+    sql = sql.replace('%s', ':iteration_id', 1)
+    result = session.execute(sa_text(sql), {'run_configs_id': run_configs_id, 'iteration_id': iteration_id})
+    row = result.fetchone()
+    if row is not None:
+        summary = DistDurSummary(
+            run_configs_id=run_configs_id,
+            iteration_id=iteration_id,
+            shortest_dist=row[0],
+            shortest_dur=row[1],
+            post_qa_dist=row[2],
+            post_qa_dur=row[3],
+            rnd_dist=row[4],
+            rnd_dur=row[5]
+        )
+        session.add(summary)
+        session.commit()
+    else:
+        logger.warning("No distance/duration summary results found for run_configs_id=%s, iteration_id=%s", run_configs_id, iteration_id)
+
+
 def run_congestion_results_sql(session, run_configs_id, iteration_id):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sql_file = os.path.join(base_dir, 'sql', 'congestion_results.sql')
@@ -394,6 +424,7 @@ def main() -> None:
             visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df)
 
             save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, run_config, iteration_id)
+            save_dist_dur_summary(session, run_config.run_configs_id, iteration_id)
             run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 
             logger.info("Workflow completed successfully!")

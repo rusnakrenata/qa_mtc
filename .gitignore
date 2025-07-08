@@ -9,7 +9,7 @@ venv/
 src/cache
 src/__pycache__
 src/modules/cache
-src/modules/files
+src/modules/files_csv
 src/modules/qubo_matrices
 
 # VS Code settings
