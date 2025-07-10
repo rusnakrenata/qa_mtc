@@ -57,8 +57,6 @@ def qubo_matrix(
     logger.info("Constructing QUBO matrix...")
     qubo_start = time.time()
     Q = defaultdict(float)
-
-    # Step 0: Fill the objective terms
     for i in range(n_filtered):
         for j in range(i + 1, n_filtered):
             for k1 in range(t):
@@ -67,51 +65,45 @@ def qubo_matrix(
                     q2 = j * t + k2
                     Q[(q1, q2)] += w[i][j][k1][k2]
 
-    # Step 1: Compute dynamic penalties for each route (real only)
+    # Step 1: Compute all dynamic penalties and store them
     dynamic_penalties = []
-    q_real_indices = []
-    q_fake_indices = []
+    q_indices = []
+    not_real_routes_indices = []
     for i in range(n_filtered):
         vi = vehicle_ids_filtered[i]
-        for k in range(t):
-            q = i * t + k
-            if (vi, k + 1) in valid_pairs:
-                # Valid route → calculate dynamic penalty
+        # Go through ALL possible routes (1 to t)
+        for k in range(1, t + 1):
+            q = i * t + (k - 1)
+            if (vi, k) in valid_pairs:
+                # Real route: use dynamic penalty
                 row_sum = sum(Q.get((q, j), 0) for j in range(n_filtered * t))
-                col_sum = sum(Q.get((j, q), 0) for j in range(n_filtered * t))
-                lambda_dynamic = row_sum + col_sum
-                dynamic_penalties.append(lambda_dynamic)
-                q_real_indices.append(q)
+                col_sum = sum(Q.get((idx, q), 0) for idx in range(n_filtered * t))
+                lambda_penalty_dynamic = (row_sum + col_sum)
+                dynamic_penalties.append(lambda_penalty_dynamic)
+                q_indices.append(q)
             else:
-                # Invalid route → track separately
-                q_fake_indices.append(q)
+                # Non-real route: use high penalty 
+                q_indices.append(q)
+                not_real_routes_indices.append(q)
 
-    # Step 2: Use max dynamic penalty for all valid routes
-    lambda_penalty = max(dynamic_penalties)
+    # Step 2: Find the maximum penalty for real routes
+    lambda_penalty = max(dynamic_penalties) 
     logger.info(f"lambda_penalty={lambda_penalty}")
 
-    # Step 3: Add one-hot penalty per vehicle
+    # Step 3: Apply the max penalty to all diagonal elements
+    for q in q_indices:
+        Q[(q, q)] += lambda_penalty * (1 - 2) if q not in not_real_routes_indices else lambda_penalty * 2
+
     for i in range(n_filtered):
-        vi = vehicle_ids_filtered[i]
-        real_qs = []
-        for k in range(t):
-            q = i * t + k
-            if (vi, k + 1) in valid_pairs:
-                real_qs.append(q)
-            else:
-                # Apply a very large penalty to make fake routes invalid
-                Q[(q, q)] += 2 * lambda_penalty  # strong positive penalty
-
-        if len(real_qs) == 0:
-            continue  # skip if no real routes
-
-        # Apply full quadratic penalty: λ * (∑ x_q - 1)^2
-        for q1 in real_qs:
-            Q[(q1, q1)] += lambda_penalty  # x_q^2 terms
-            Q[(q1, 0)] += -2 * lambda_penalty  # linear -2*x_q
-            for q2 in real_qs:
-                if q1 < q2:
-                    Q[(q1, q2)] += 2 * lambda_penalty  # 2*x_q1*x_q2
+        # Go through ALL possible routes (1 to t)
+        for k1 in range(1, t + 1):
+            q1 = i * t + (k1 - 1)
+            for k2 in range(1, t ):
+                if k1 != t:
+                    q2 = q1 +k2
+                else:
+                    q2 = q1 -1
+                Q[(q1, q2)] += lambda_penalty + 1 
 
 
     logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")

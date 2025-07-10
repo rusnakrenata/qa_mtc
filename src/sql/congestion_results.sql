@@ -14,9 +14,23 @@ SELECT
     SUM(congestion_shortest_dur) AS congestion_shortest_dur,
     SUM(congestion_random) AS congestion_random,
     (SUM(congestion_shortest_dur) - SUM(congestion_post_qa)) / SUM(congestion_shortest_dur) * 100 AS pct_qa_shortest_dur_improvement,
-    (SUM(congestion_random) - SUM(congestion_shortest_dur)) / SUM(congestion_random) * 100 AS pct_qa_random__improvement
+    (SUM(congestion_random) - SUM(congestion_post_qa)) / SUM(congestion_random) * 100 AS pct_qa_random__improvement
 FROM trafficOptimization.congestion_summary cs
 WHERE run_configs_id = %s 
+  AND iteration_id = %s;
+SELECT 
+    SUM(shortest_dur) AS shortest_dur,
+    SUM(post_qa_dur) AS post_qa_dur,
+    SUM(rnd_dur) AS rnd_dur,
+    (SUM(shortest_dur) - SUM(post_qa_dur)) / SUM(shortest_dur) * 100 AS pct_qa_shortest_dur_improvement,
+    (SUM(rnd_dur) - SUM(post_qa_dur)) / SUM(rnd_dur) * 100 AS pct_rnd_dur_improvement,
+    SUM(shortest_dist) AS shortest_dist,
+    SUM(post_qa_dist) AS post_qa_dist,
+    SUM(rnd_dist) AS rnd_dist,
+    (SUM(shortest_dist) - SUM(post_qa_dist)) / SUM(shortest_dist) * 100 AS pct_qa_shortest_dist_improvement,
+    (SUM(rnd_dist) - SUM(post_qa_dist)) / SUM(rnd_dist) * 100 AS pct_rnd_dist_improvement   
+FROM trafficOptimization.dist_dur_summary dd
+WHERE run_configs_id = %s
   AND iteration_id = %s;
 WITH shortest_routes AS (
     SELECT 

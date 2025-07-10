@@ -37,12 +37,7 @@ QUBO_OUTPUT_DIR = Path("files_csv")
 MAPS_OUTPUT_DIR = Path("files_html")
 QUBO_MATRIX_FILENAME = QUBO_OUTPUT_DIR / "qubo_matrix.csv"
 CONGESTION_WEIGHTS_FILENAME = QUBO_OUTPUT_DIR / "congestion_weights.csv"
-CONGESTION_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "congestion_heatmap.html"
-AFFECTED_EDGES_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "affected_edges_heatmap.html"
-SHORTEST_DUR_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "shortest_routes_dur_congestion_heatmap.html"
-SHORTEST_DIS_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "shortest_routes_dis_congestion_heatmap.html"
-POST_QA_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "post_qa_congestion_heatmap.html"
-RANDOM_ROUTES_HEATMAP_FILENAME = MAPS_OUTPUT_DIR / "random_routes_congestion_heatmap.html"
+# Removed static HTML filenames
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -65,15 +60,16 @@ def get_or_create_city(session) -> Any:
             name=CITY_NAME,
             center_lat=lat,
             center_lon=lon,
+            radius_km=RADIUS_KM,
             is_subset=True
         ).first()
         
         if not city:
             # Create new city subset
-            nodes, edges = get_city_graph(CITY_NAME, center_coords=CENTER_COORDS, radius_km=1.0)
+            nodes, edges = get_city_graph(CITY_NAME, center_coords=CENTER_COORDS, radius_km =RADIUS_KM)
             city = store_city_to_db(
                 session, CITY_NAME, nodes, edges, City, Node, Edge,
-                center_coords=CENTER_COORDS, radius_km=1.0
+                center_coords=CENTER_COORDS, radius_km=RADIUS_KM
             )
     else:
         # Look for existing full city
@@ -208,7 +204,13 @@ def visualize_and_save_congestion(
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
     post_qa_congestion_df: pd.DataFrame,
-    random_routes_df: pd.DataFrame
+    random_routes_df: pd.DataFrame,
+    congestion_heatmap_filename: Path,
+    affected_edges_heatmap_filename: Path,
+    shortest_dur_heatmap_filename: Path,
+    shortest_dis_heatmap_filename: Path,
+    post_qa_heatmap_filename: Path,
+    random_routes_heatmap_filename: Path
 ) -> None:
     """Visualize congestion and save heatmaps."""
     all_scores = pd.concat([
@@ -221,22 +223,22 @@ def visualize_and_save_congestion(
     vmax = float(all_scores.max())
     plot_map = plot_congestion_heatmap_interactive(edges, congestion_df, offset_deg=OFFSET_DEG)
     if plot_map is not None:
-        plot_map.save(CONGESTION_HEATMAP_FILENAME)
+        plot_map.save(congestion_heatmap_filename)
     plot_map_affected_edges = plot_congestion_heatmap_interactive(edges, affected_edges_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_affected_edges is not None:
-        plot_map_affected_edges.save(AFFECTED_EDGES_HEATMAP_FILENAME)
+        plot_map_affected_edges.save(affected_edges_heatmap_filename)
     plot_map_dur = plot_congestion_heatmap_interactive(edges, shortest_routes_dur_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_dur is not None:
-        plot_map_dur.save(SHORTEST_DUR_HEATMAP_FILENAME)
+        plot_map_dur.save(shortest_dur_heatmap_filename)
     plot_map_dis = plot_congestion_heatmap_interactive(edges, shortest_routes_dis_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_dis is not None:
-        plot_map_dis.save(SHORTEST_DIS_HEATMAP_FILENAME)
+        plot_map_dis.save(shortest_dis_heatmap_filename)
     plot_map_post_qa = plot_congestion_heatmap_interactive(edges, post_qa_congestion_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_post_qa is not None:
-        plot_map_post_qa.save(POST_QA_HEATMAP_FILENAME)
+        plot_map_post_qa.save(post_qa_heatmap_filename)
     plot_map_random = plot_congestion_heatmap_interactive(edges, random_routes_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_random is not None:
-        plot_map_random.save(RANDOM_ROUTES_HEATMAP_FILENAME)
+        plot_map_random.save(random_routes_heatmap_filename)
 
 
 def save_congestion_summary(
@@ -420,8 +422,25 @@ def main() -> None:
             random_routes_df = compute_random_routes(session, run_config.run_configs_id, iteration_id)
             shortest_routes_dur_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="duration")
             shortest_routes_dis_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="distance")
-            # I changed the congestion_df to affected_edges_df - from leiden clustering
-            visualize_and_save_congestion(edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df)
+
+            # Dynamically generate HTML filenames with prefix
+            prefix = f"{run_config.run_configs_id}_{iteration_id}"
+            congestion_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_congestion_heatmap.html"
+            affected_edges_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_affected_edges_heatmap.html"
+            shortest_dur_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_shortest_routes_dur_congestion_heatmap.html"
+            shortest_dis_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_shortest_routes_dis_congestion_heatmap.html"
+            post_qa_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_post_qa_congestion_heatmap.html"
+            random_routes_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_random_routes_congestion_heatmap.html"
+
+            visualize_and_save_congestion(
+                edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df,
+                congestion_heatmap_filename,
+                affected_edges_heatmap_filename,
+                shortest_dur_heatmap_filename,
+                shortest_dis_heatmap_filename,
+                post_qa_heatmap_filename,
+                random_routes_heatmap_filename
+            )
 
             save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, run_config, iteration_id)
             save_dist_dur_summary(session, run_config.run_configs_id, iteration_id)
