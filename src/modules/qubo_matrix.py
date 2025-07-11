@@ -87,7 +87,7 @@ def qubo_matrix(
                 q_fake_indices.append(q)
 
     # Step 2: Use max dynamic penalty for all valid routes
-    lambda_penalty = max(dynamic_penalties)
+    lambda_penalty = max(dynamic_penalties)*n_filtered*t/10000 # gamma = n_filtered*t/10000 scaling parameter
     logger.info(f"lambda_penalty={lambda_penalty}")
 
     # Step 3: Add one-hot penalty per vehicle
@@ -107,11 +107,24 @@ def qubo_matrix(
 
         # Apply full quadratic penalty: λ * (∑ x_q - 1)^2
         for q1 in real_qs:
-            Q[(q1, q1)] += lambda_penalty  # x_q^2 terms
-            Q[(q1, 0)] += -2 * lambda_penalty  # linear -2*x_q
+            # this can be simplified and the linear term can be moved to diagonal
+            #Q[(q1, q1)] += lambda_penalty  # x_q^2 terms
+            #Q[(q1, 0)] += -2 * lambda_penalty  # linear -2*x_q
+            Q[(q1, q1)] += - lambda_penalty
             for q2 in real_qs:
                 if q1 < q2:
                     Q[(q1, q2)] += 2 * lambda_penalty  # 2*x_q1*x_q2
+
+
+
+    # Optional sanity check:
+    max_obj_term = max(Q[q1, q2] for (q1, q2) in Q if q1 != q2)
+    print(f"Max objective term: {max_obj_term:.2f}")
+    if lambda_dynamic > 5*max_obj_term:
+        print("Penalty sufficient!")
+    else:
+        print(f"CHANGE THE CALCULATION OF GAMMA: {n_filtered*t/10000:2f}")
+
 
 
     logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")
