@@ -19,6 +19,12 @@ def get_city_graph(city_name: str, center_coords: Optional[Tuple[float, float]] 
         nodes: DataFrame of nodes
         edges: DataFrame of edges
     """
+
+    # This includes all reasonable vehicle road types
+    custom_filter = (
+    '["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified|service|living_street"]'
+    )
+
     try:
         if center_coords is not None and radius_km is not None:
             # Generate subset of city around specified coordinates

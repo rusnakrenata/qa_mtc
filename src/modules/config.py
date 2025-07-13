@@ -23,6 +23,10 @@ LAMBDA_VALUE = None
 COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
 
+# Vehicle origin and destination
+ATTRACTION_POINT = (48.719390, 21.258057)
+D_ALTERNATIVES = 5
+
 
 
 

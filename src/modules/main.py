@@ -6,7 +6,8 @@ from get_city_data_from_db import get_city_data_from_db
 from store_city_to_db import store_city_to_db
 from get_or_create_run_config import get_or_create_run_config
 from create_iteration import create_iteration
-from generate_vehicles import generate_vehicles
+from generate_vehicles_random import generate_vehicles
+from generate_vehicles_attraction import generate_vehicles_attraction
 from generate_vehicle_routes import generate_vehicle_routes
 from generate_congestion import generate_congestion
 from plot_congestion_heatmap import plot_congestion_heatmap_interactive
@@ -104,13 +105,53 @@ def create_simulation_iteration(session, run_configs_id) -> Optional[int]:
     return iteration_id
 
 
-def generate_and_store_vehicles(session, run_configs, iteration_id) -> Any:
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+def generate_and_store_vehicles(
+    session,
+    run_configs,
+    iteration_id,
+    attraction_point=None,        # (lat, lon) tuple or None
+    d_alternatives=None           # int or None
+) -> Any:
     """Generate vehicles and store them in the database."""
     logger.info("Generate vehicles at: %s", datetime.now())
-    return generate_vehicles(
-        session, Vehicle, run_configs.run_configs_id, iteration_id,
-        get_city_data_from_db(session, run_configs.city_id)[1], N_VEHICLES, MIN_LENGTH, MAX_LENGTH
-    )
+    
+    # Load edges GeoDataFrame
+    _, edges_gdf = get_city_data_from_db(session, run_configs.city_id)
+    
+    if attraction_point is not None and d_alternatives is not None:
+        # Use attraction-aware version
+        logger.info("Using attraction-based vehicle generation.")
+        return generate_vehicles_attraction(
+            session=session,
+            Vehicle=Vehicle,
+            run_config_id=run_configs.run_configs_id,
+            iteration_id=iteration_id,
+            edges_gdf=edges_gdf,
+            nr_vehicles=N_VEHICLES,
+            min_length=MIN_LENGTH,
+            max_length=MAX_LENGTH,
+            attraction_point=attraction_point,
+            d_alternatives=d_alternatives
+        )
+    else:
+        # Use default version
+        logger.info("Using random vehicle generation.")
+        return generate_vehicles(
+            session=session,
+            Vehicle=Vehicle,
+            run_config_id=run_configs.run_configs_id,
+            iteration_id=iteration_id,
+            edges_gdf=edges_gdf,
+            nr_vehicles=N_VEHICLES,
+            min_length=MIN_LENGTH,
+            max_length=MAX_LENGTH
+        )
+
 
 
 def generate_and_store_routes(session, run_configs_id, iteration_id, vehicles_gdf, edges) -> pd.DataFrame:
@@ -380,7 +421,7 @@ def main() -> None:
             iteration_id = create_simulation_iteration(session, run_config.run_configs_id)
             if iteration_id is None:
                 return
-            vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id)
+            vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id, attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES)
             vehicle_routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles_gdf, edges)
             congestion_df = compute_and_store_congestion(session, run_config.run_configs_id, iteration_id)
             weights_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
