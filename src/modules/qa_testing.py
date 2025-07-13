@@ -90,12 +90,19 @@ def qa_testing(
     if comp_type == 'sa':
         sampler = SimulatedAnnealingSampler()
         response = sampler.sample(bqm, num_reads=num_reads)
+        total_annealing_time_s = time.perf_counter() - start_time  # No direct timing info; use measured wall-clock
+
     elif comp_type == 'hybrid':
         sampler = LeapHybridSampler()
         response = sampler.sample(bqm)
+        total_annealing_time_s = response.info.get('run_time', 0) / 1_000_000  # µs to s
+
     elif comp_type == 'qpu':
         sampler = EmbeddingComposite(DWaveSampler())
         response = sampler.sample(bqm, num_reads=num_reads)
+        annealing_time_us = response.info['timing']['annealing_time']  # per read (µs)
+        total_annealing_time_s = (annealing_time_us * num_reads) / 1_000_000  # µs to s
+
     else:
         logger.error(f"Unknown comp_type: {comp_type}")
         raise ValueError(f"Unknown comp_type: {comp_type}")
@@ -147,7 +154,7 @@ def qa_testing(
         assignment_valid=int(assignment_valid),
         assignment=assignment,
         energy=energy,
-        duration=duration_qa,
+        duration=total_annealing_time_s,
         qubo_path=str(filepath),
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
         dwave_constraints_check=dwave_constraints_check,
@@ -167,7 +174,7 @@ def qa_testing(
         'assignment': assignment,
         'energy': energy,
         'qubo_path': str(filepath),
-        'duration': duration_qa,
+        'duration': total_annealing_time_s,
         'lambda_strategy': lambda_strategy,
         'lambda_value': lambda_value,
         'vehicle_ids': vehicle_ids

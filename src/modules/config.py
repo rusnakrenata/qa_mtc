@@ -4,9 +4,9 @@
 #CITY_NAME = "Bratislava, Slovakia"
 #CENTER_COORDS = None#(48.7208, 21.2575)
 #RADIUS_KM = None
-CITY_NAME = "Bratislava, Slovakia" 
-CENTER_COORDS = (48.1486, 17.1077)
-RADIUS_KM = 3
+CITY_NAME = "Košice, Slovakia" 
+CENTER_COORDS = None
+RADIUS_KM = None
 N_VEHICLES = 25000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500

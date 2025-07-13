@@ -87,7 +87,13 @@ def qubo_matrix(
                 q_fake_indices.append(q)
 
     # Step 2: Use max dynamic penalty for all valid routes
-    lambda_penalty = max(dynamic_penalties)*n_filtered*t/10000 # gamma = n_filtered*t/10000 scaling parameter
+    scale = n_filtered*t/10000
+    if scale < 1:
+        gamma = 1
+    else:
+        gamma = scale
+        
+    lambda_penalty = max(dynamic_penalties)*gamma # gamma = n_filtered*t/10000 scaling parameter
     logger.info(f"lambda_penalty={lambda_penalty}")
 
     # Step 3: Add one-hot penalty per vehicle
@@ -120,10 +126,10 @@ def qubo_matrix(
     # Optional sanity check:
     max_obj_term = max(Q[q1, q2] for (q1, q2) in Q if q1 != q2)
     print(f"Max objective term: {max_obj_term:.2f}")
-    if lambda_dynamic > 5*max_obj_term:
+    if lambda_dynamic > max_obj_term:
         print("Penalty sufficient!")
     else:
-        print(f"CHANGE THE CALCULATION OF GAMMA: {n_filtered*t/10000:2f}")
+        print(f"CHANGE THE CALCULATION OF GAMMA: {gamma:2f}")
 
 
 

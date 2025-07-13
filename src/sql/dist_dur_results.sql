@@ -24,6 +24,19 @@ posta_qa AS (
     WHERE sr.run_configs_id = vr.run_configs_id
       AND sr.iteration_id = vr.iteration_id
 ),
+post_gurobi AS (
+    SELECT 
+        sr.vehicle_id, 
+        sr.route_id, 
+        vr.distance, 
+        vr.duration
+    FROM gurobi_routes sr 
+    INNER JOIN vehicle_routes vr 
+        ON sr.vehicle_id = vr.vehicle_id
+        AND sr.route_id = vr.route_id
+    WHERE sr.run_configs_id = vr.run_configs_id
+      AND sr.iteration_id = vr.iteration_id
+),
 random AS (
     SELECT 
         rr.vehicle_id, 
@@ -51,9 +64,13 @@ SELECT
     SUM(p.distance) AS post_qa_dist, 
     SUM(p.duration) AS post_qa_dur,
     SUM(r.distance) AS rnd_dist, 
-    SUM(r.duration) AS rnd_dur
+    SUM(r.duration) AS rnd_dur,
+    SUM(gr.distance) as post_gurobi_dist,
+    SUM(gr.duration) as post_gurobi_dur
 FROM shortest s
 INNER JOIN posta_qa p 
     ON p.vehicle_id = s.vehicle_id
+INNER JOIN post_gurobi gr
+    ON gr.vehicle_id = s.vehicle_id
 INNER JOIN random r 
     ON r.vehicle_id = s.vehicle_id;

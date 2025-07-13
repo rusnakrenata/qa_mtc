@@ -12,6 +12,7 @@ src/modules/cache
 src/modules/__pycache__
 src/modules/files_csv
 src/modules/qubo_matrices
+qa_mtc/gurobi.lic
 
 # VS Code settings
 .vscode/

@@ -16,6 +16,8 @@ from compute_shortest_routes import compute_shortest_routes
 from compute_random_routes import compute_random_routes
 from post_qa_congestion import post_qa_congestion
 from qa_testing import qa_testing
+from gurobi import solve_qubo_with_gurobi
+from post_gurobi_congestion import post_gurobi_congestion
 from datetime import datetime
 import logging
 import os
@@ -204,20 +206,23 @@ def visualize_and_save_congestion(
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
     post_qa_congestion_df: pd.DataFrame,
+    post_gurobi_congestion_df: pd.DataFrame,
     random_routes_df: pd.DataFrame,
     congestion_heatmap_filename: Path,
     affected_edges_heatmap_filename: Path,
     shortest_dur_heatmap_filename: Path,
     shortest_dis_heatmap_filename: Path,
     post_qa_heatmap_filename: Path,
-    random_routes_heatmap_filename: Path
+    random_routes_heatmap_filename: Path,
+    post_gurobi_heatmap_file: Path
 ) -> None:
     """Visualize congestion and save heatmaps."""
     all_scores = pd.concat([
         shortest_routes_dur_df['congestion_score'],
         shortest_routes_dis_df['congestion_score'],
         post_qa_congestion_df['congestion_score'],
-        random_routes_df['congestion_score']
+        random_routes_df['congestion_score'],
+        post_gurobi_congestion_df['congestion_score']
     ])
     vmin = float(all_scores.min())
     vmax = float(all_scores.max())
@@ -239,6 +244,9 @@ def visualize_and_save_congestion(
     plot_map_random = plot_congestion_heatmap_interactive(edges, random_routes_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
     if plot_map_random is not None:
         plot_map_random.save(random_routes_heatmap_filename)
+    plot_map_post_gurobi = plot_congestion_heatmap_interactive(edges, post_gurobi_congestion_df, offset_deg=OFFSET_DEG, vmin=vmin, vmax=vmax)
+    if plot_map_post_gurobi is not None:
+        plot_map_post_gurobi.save(post_gurobi_heatmap_file)
 
 
 def save_congestion_summary(
@@ -249,6 +257,7 @@ def save_congestion_summary(
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
     random_routes_df: pd.DataFrame,
+    post_gurobi_df: pd.DataFrame,
     run_config: RunConfig,
     iteration_id: int
 ) -> None:
@@ -260,6 +269,7 @@ def save_congestion_summary(
     merged = merged.merge(shortest_routes_dur_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dur'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dis_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dis'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(random_routes_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_random'}), on='edge_id', how='left')  # type: ignore
+    merged = merged.merge(post_gurobi_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_gurobi'}), on='edge_id', how='left')  # type: ignore
     merged = merged.fillna(0)
     records = [
         CongestionSummary(
@@ -270,7 +280,8 @@ def save_congestion_summary(
             congestion_post_qa=float(row['congestion_post_qa']),
             congestion_shortest_dur=float(row['congestion_shortest_dur']),
             congestion_shortest_dis=float(row['congestion_shortest_dis']),
-            congestion_random=float(row['congestion_random'])
+            congestion_random=float(row['congestion_random']),
+            congestion_post_gurobi=float(row['congestion_post_gurobi'])
         )
         for _, row in merged.iterrows()
     ]
@@ -300,7 +311,10 @@ def save_dist_dur_summary(session, run_configs_id, iteration_id):
             post_qa_dist=row[2],
             post_qa_dur=row[3],
             rnd_dist=row[4],
-            rnd_dur=row[5]
+            rnd_dur=row[5],
+            post_gurobi_dist=row[6],
+            post_gurobi_dur=row[7]
+
         )
         session.add(summary)
         session.commit()
@@ -405,6 +419,7 @@ def main() -> None:
                 dwave_constraints_check=dwave_constraints_check
             )
             qa_assignment = qa_result['assignment']
+            qa_annealing_time = qa_result['duration']
 
             # Post-QA congestion
             post_qa_congestion_df = post_qa_congestion(
@@ -416,8 +431,25 @@ def main() -> None:
                 qa_assignment=qa_assignment,
                 method=ROUTE_METHOD
             )
+
+            result, obj_val = solve_qubo_with_gurobi(Q, run_config.run_configs_id, iteration_id, session, time_limit_seconds=qa_annealing_time)
+
+            post_gurobi_congestion_df = post_gurobi_congestion(
+                session=session,
+                run_configs_id=run_config.run_configs_id,
+                iteration_id=iteration_id,
+                all_vehicle_ids=all_vehicle_ids,
+                optimized_vehicle_ids=filtered_vehicle_ids,
+                gurobi_assignment=result,
+                t=t,
+                method=ROUTE_METHOD
+            )
+
             post_qa_congestion_df = post_qa_congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
             post_qa_congestion_df = pd.DataFrame(post_qa_congestion_df)
+
+            post_gurobi_congestion_df = post_gurobi_congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
+            post_gurobi_congestion_df = pd.DataFrame(post_gurobi_congestion_df)
 
             random_routes_df = compute_random_routes(session, run_config.run_configs_id, iteration_id)
             shortest_routes_dur_df = compute_shortest_routes(session, run_config.run_configs_id, iteration_id, method="duration")
@@ -431,18 +463,20 @@ def main() -> None:
             shortest_dis_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_shortest_routes_dis_congestion_heatmap.html"
             post_qa_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_post_qa_congestion_heatmap.html"
             random_routes_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_random_routes_congestion_heatmap.html"
+            post_gurobi_heatmap_file =  MAPS_OUTPUT_DIR / f"{prefix}_post_gurobi_congestion_heatmap.html"
 
             visualize_and_save_congestion(
-                edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df,
+                edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df, post_gurobi_congestion_df,
                 congestion_heatmap_filename,
                 affected_edges_heatmap_filename,
                 shortest_dur_heatmap_filename,
                 shortest_dis_heatmap_filename,
                 post_qa_heatmap_filename,
-                random_routes_heatmap_filename
+                random_routes_heatmap_filename,
+                post_gurobi_heatmap_file
             )
 
-            save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, run_config, iteration_id)
+            save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, post_gurobi_congestion_df, run_config, iteration_id)
             save_dist_dur_summary(session, run_config.run_configs_id, iteration_id)
             run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 

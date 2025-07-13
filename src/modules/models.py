@@ -190,6 +190,7 @@ class CongestionSummary(Base):
     congestion_shortest_dur = Column(Float, nullable=True)
     congestion_shortest_dis = Column(Float, nullable=True)
     congestion_random = Column(Float, nullable=True)
+    congestion_post_gurobi = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class SelectedRoute(Base):
@@ -230,7 +231,33 @@ class DistDurSummary(Base):
     post_qa_dur = Column(Float, nullable=True)
     rnd_dist = Column(Float, nullable=True)
     rnd_dur = Column(Float, nullable=True)
+    post_gurobi_dist = Column(Float, nullable=True)
+    post_gurobi_dur = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class GurobiResult(Base):
+    __tablename__ = 'gurobi_results'
+    gurobi_result_id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    assignment = Column(JSON)  # Store variable assignment as JSON
+    objective_value = Column(Float)
+    duration = Column(Float)
+    congestion_score = Column(Float)  # Overall congestion after assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class GurobiRoute(Base):
+    """SelectedRoute table: stores the routes selected by QA optimization for each vehicle."""
+    __tablename__ = 'gurobi_routes'
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_gurobi_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
 
 # Create all tables if they do not exist
 Base.metadata.create_all(engine)

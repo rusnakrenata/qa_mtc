@@ -87,6 +87,8 @@ def normalize_congestion_weights(
         w_max = 1.0
     else:
         w_max = 0.0
+
+    
     # Penalty values (R) remain as R, not normalized
     logger.info(f"Normalized weights: min={min_w if np.any(nonzero) else 0.0}, max={w_max if np.any(nonzero) else 0.0}, invalid pairs: {len(invalid_pairs)}")
     return w.tolist(), w_max
