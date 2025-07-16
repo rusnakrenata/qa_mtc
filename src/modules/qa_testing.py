@@ -93,7 +93,7 @@ def qa_testing(
         total_annealing_time_s = time.perf_counter() - start_time  # No direct timing info; use measured wall-clock
 
     elif comp_type == 'hybrid':
-        sampler = LeapHybridSampler()
+        sampler = LeapHybridSampler(connection_close = True)
         response = sampler.sample(bqm)
         total_annealing_time_s = response.info.get('run_time', 0) / 1_000_000  # µs to s
 
@@ -102,6 +102,7 @@ def qa_testing(
         response = sampler.sample(bqm, num_reads=num_reads)
         annealing_time_us = response.info['timing']['annealing_time']  # per read (µs)
         total_annealing_time_s = (annealing_time_us * num_reads) / 1_000_000  # µs to s
+
 
     else:
         logger.error(f"Unknown comp_type: {comp_type}")

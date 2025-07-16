@@ -32,12 +32,33 @@ def select_vehicles_by_leiden_joined_clusters(
     g.add_vertices(len(nodes))
     g.add_edges([(node_to_idx[u], node_to_idx[v]) for u, v in edges])
     g.es['weight'] = weights
+
+
+
+    num_nodes = len(set(congestion_df['vehicle1']).union(congestion_df['vehicle2']))
+    num_edges = len(congestion_df)
+    density = 2 * num_edges / (num_nodes * (num_nodes - 1))
+
+    # Start with base guess
+    default_resolution = 0.7
+
+    if density < 0.01:
+        default_resolution = 0.5  # very sparse
+    elif density < 0.05:
+        default_resolution = 0.7
+    elif density < 0.1:
+        default_resolution = 1.0
+    else:
+        default_resolution = 1.2  # very dense
+    print("RESOLUTION based on density:" , default_resolution)
+
+
     # Leiden partitioning
     part = leidenalg.find_partition(
         g,
         leidenalg.RBConfigurationVertexPartition,
         weights='weight',
-        resolution_parameter=resolution
+        resolution_parameter=default_resolution
     )
     # Build clusters as lists of vehicle IDs and compute their total congestion
     cluster_info = []
@@ -54,6 +75,16 @@ def select_vehicles_by_leiden_joined_clusters(
         selected_vehicle_ids.update(vehicle_ids)
         if len(selected_vehicle_ids) >= target_size:
             break
+    '''
+    # ✅ ADD THIS BLOCK to include all direct neighbors of selected vehicles
+    neighbor_vehicle_ids = set()
+    for _, row in congestion_df.iterrows():
+        if row['vehicle1'] in selected_vehicle_ids or row['vehicle2'] in selected_vehicle_ids:
+            neighbor_vehicle_ids.update([row['vehicle1'], row['vehicle2']])
+    selected_vehicle_ids.update(neighbor_vehicle_ids)
+    '''
+
+
     selected_vehicle_ids_sorted = sorted(selected_vehicle_ids)
     logger.info(f"Number of selected vehicle indexes in joined Leiden clusters: {len(selected_vehicle_ids_sorted)}")
 

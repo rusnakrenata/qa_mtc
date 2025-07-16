@@ -17,25 +17,13 @@ DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
 # --- QUBO/QA Parameters ---
-FILTERING_PERCENTAGE = 0.25
-LAMBDA_STRATEGY = "normalized"   # or "max_weight"
+FILTERING_PERCENTAGE = 0.20
+LAMBDA_STRATEGY = "penalized"   # or "max_weight"
 LAMBDA_VALUE = None
 COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
 
 # Vehicle origin and destination
-ATTRACTION_POINT = (48.719390, 21.258057)
-D_ALTERNATIVES = 5
+ATTRACTION_POINT = None#(48.719390, 21.258057)
+D_ALTERNATIVES = None#5
 
-
-
-
-#CITY_NAME = "London, England" #(covers Central London and much of the congestion charge zone, including Westminster, City of London, Southwark, Camden, etc.)
-#CENTER_COORDS = (51.5074, -0.1278)
-#RADIUS_KM = 10 #(covers Central London and much of the congestion charge zone, including Westminster, City of London, Southwark, Camden, etc.)
-#CITY_NAME = "Paris, France" #(covers Paris and parts of the Île-de-France region)
-#CENTER_COORDS = (48.8566, 2.3522)
-#RADIUS_KM = 10 #(covers Paris and parts of the Île-de-France region)
-#CITY_NAME = "Berlin, Germany" #(covers Berlin and parts of Brandenburg)
-#CENTER_COORDS = (52.5200, 13.4050)
-#RADIUS_KM = 10 #(covers Berlin and parts of Brandenburg)

@@ -105,8 +105,6 @@ def create_simulation_iteration(session, run_configs_id) -> Optional[int]:
     return iteration_id
 
 
-from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +189,7 @@ def build_and_save_qubo_matrix(
     vehicle_routes_df: pd.DataFrame,
     congestion_df: pd.DataFrame,
     weights_df: pd.DataFrame,
+    duration_penalty_df: pd.DataFrame,
     session: Any,
     run_configs_id: int,
     iteration_id: int,
@@ -201,7 +200,7 @@ def build_and_save_qubo_matrix(
 ) -> Tuple[Any, List[Any], pd.DataFrame, float]:
     """Build QUBO matrix and save run stats."""
     Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = qubo_matrix(
-        N_VEHICLES, t, congestion_df, weights_df, vehicle_routes_df,
+        N_VEHICLES, t, congestion_df, weights_df, duration_penalty_df, vehicle_routes_df,
         lambda_strategy=lambda_strategy,
         fixed_lambda=fixed_lambda,
         filtering_percentage=filtering_percentage
@@ -424,7 +423,7 @@ def main() -> None:
             vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id, attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES)
             vehicle_routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles_gdf, edges)
             congestion_df = compute_and_store_congestion(session, run_config.run_configs_id, iteration_id)
-            weights_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
+            weights_df, duration_penalty_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
             weights_df.to_csv(CONGESTION_WEIGHTS_FILENAME, index=False)
 
             # Filtering for QUBO
@@ -433,7 +432,7 @@ def main() -> None:
             # QUBO matrix
             t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
             Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = build_and_save_qubo_matrix(
-                vehicle_routes_df, congestion_df, weights_df, session, run_config.run_configs_id, iteration_id, t,
+                vehicle_routes_df, congestion_df, weights_df, duration_penalty_df, session, run_config.run_configs_id, iteration_id, t,
                 LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE
             )
 
