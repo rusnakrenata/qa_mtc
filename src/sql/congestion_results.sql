@@ -8,9 +8,9 @@ FROM trafficOptimization.qa_results qr
 WHERE run_configs_id = %s 
   AND iteration_id = %s;
 SELECT 
-    --SUM(congestion_all) AS congestion_all, 
+    #SUM(congestion_all) AS congestion_all, 
     SUM(congestion_post_qa) AS congestion_post_qa, 
-    --SUM(congestion_shortest_dis) AS congestion_shortest_dist, 
+    #SUM(congestion_shortest_dis) AS congestion_shortest_dist, 
     SUM(congestion_shortest_dur) AS congestion_shortest_dur,
     SUM(congestion_random) AS congestion_random,
     SUM(congestion_post_gurobi) as congestion_post_gurobi,
@@ -31,8 +31,8 @@ WHERE run_configs_id = %s
   AND iteration_id = %s
 )
 SELECT 
-	SUM(post_qa_dur) + SUM(cong_post_qa)*10*0.5 as post_qa_DUR_ADJ, 
-	SUM(post_gurobi_dur) + SUM(cong_post_gurobi)*10*0.5 as post_gurobi_DUR_ADJ, 
+	SUM(post_qa_dur) + SUM(cong_post_qa) as post_qa_DUR_ADJ, 
+	SUM(post_gurobi_dur) + SUM(cong_post_gurobi) as post_gurobi_DUR_ADJ, 
     SUM(shortest_dur) AS shortest_dur,
     SUM(post_qa_dur) AS post_qa_dur,
     SUM(post_gurobi_dur) as post_gurobi_dur,

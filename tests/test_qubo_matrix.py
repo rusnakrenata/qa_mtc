@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from src.modules.qubo_matrix import qubo_matrix
+from src.modules.qubo_matrix_pen_on_diagonals import qubo_matrix
 
 def make_weights_df(n, t):
     data = []

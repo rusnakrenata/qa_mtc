@@ -30,30 +30,13 @@ def process_group(group_df, dist_thresh, speed_diff_thresh):
         merged['lat_a'].values, merged['lon_a'].values,
         merged['lat_b'].values, merged['lon_b'].values
     )
-    merged['avg_speed'] = (merged['speed_a'] + merged['speed_b'])/2.0
+    merged['speed_diff'] = (merged['speed_a'] - merged['speed_b']).abs()
 
-    '''
-    merged['congestion_score'] =   np.maximum(
-    (merged['avg_speed'] - merged['distance'] / 2.0) / merged['avg_speed'],
-    0
-    )*dist_thresh #replace za time window
-    '''
-    # Define a set of scaling factors for distance sensitivity
-    distance_factors = [0.5, 1.0, 1.5, 2.0]
-    scores = []
-
-    # Compute congestion score for each scaling factor
-    for factor in distance_factors:
-        score = np.maximum(
-            (merged['avg_speed'] - merged['distance'] / factor) / merged['avg_speed'],
-            0
-        )
-        scores.append(score)
-
-    # Stack and take element-wise maximum across all factor-based scores
-    merged['congestion_score'] = np.vstack(scores).max(axis=0) * dist_thresh
-
-
+    merged['congestion_score'] = np.where(
+        (merged['distance'] < dist_thresh) & (merged['speed_diff'] < speed_diff_thresh),
+        1 / ((1 + merged['distance']) * (1 + merged['speed_diff'])),
+        0
+    )
 
     filtered = merged[merged['congestion_score'] > 0]
     if filtered.empty:

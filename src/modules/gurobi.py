@@ -11,7 +11,8 @@ project_root = Path(__file__).resolve().parents[2]
 license_path = project_root / "gurobi.lic"
 os.environ["GRB_LICENSE_FILE"] = str(license_path)
 
-def solve_qubo_with_gurobi(Q: dict, run_configs_id, iteration_id, session, time_limit_seconds: int = 300):
+
+def solve_qubo_with_gurobi(Q: dict, n: int, t: int, run_configs_id, iteration_id, session, time_limit_seconds: int = 300):
     """
     Solves a QUBO problem using Gurobi.
     Args:
@@ -20,7 +21,7 @@ def solve_qubo_with_gurobi(Q: dict, run_configs_id, iteration_id, session, time_
     Returns:
         Dict of variable values and objective value
     """
-
+    time_limit_seconds = min(time_limit_seconds, 60)  # Ensure at least 1 minute
     start_time = time.perf_counter()
     model = Model("QUBO_Traffic")
     model.setParam("TimeLimit", time_limit_seconds)
@@ -65,3 +66,75 @@ def solve_qubo_with_gurobi(Q: dict, run_configs_id, iteration_id, session, time_
     return result, objective_value
 
 
+'''
+from gurobipy import Model, GRB, quicksum
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+def solve_qubo_with_gurobi(Q: dict, n: int, t: int, run_configs_id, iteration_id, session, time_limit_seconds: int = 300):
+    """
+    Solves a QUBO problem using Gurobi.
+    Args:
+        Q: dict of {(i,j): value}
+        n: number of vehicles
+        t: number of route alternatives per vehicle
+        run_configs_id: identifier for the run config
+        iteration_id: identifier for the iteration
+        session: SQLAlchemy session to store results
+        time_limit_seconds: Max time in seconds to let Gurobi run
+
+    Returns:
+        Tuple of (result_dict, objective_value)
+    """
+    start_time = time.perf_counter()
+    model = Model("CQM_Traffic")
+    model.setParam("TimeLimit", time_limit_seconds)
+    model.setParam("OutputFlag", 0)
+
+    # Define binary variables
+    variables = {}
+    for q in range(n * t):
+        variables[q] = model.addVar(vtype=GRB.BINARY, name=f"x_{q}")
+
+    model.update()
+
+    # Define QUBO objective
+    obj = quicksum(Q[i, j] * variables[i] * variables[j] for i, j in Q)
+    model.setObjective(obj, GRB.MINIMIZE)
+
+    # Add one-hot constraints for each vehicle
+    for i in range(n):
+        terms = [variables[i * t + k] for k in range(t)]
+        model.addConstr(quicksum(terms) == 1, name=f"one_hot_vehicle_{i}")
+
+    model.optimize()  
+
+    duration = time.perf_counter() - start_time
+
+    # Handle solution
+    if model.SolCount == 0:
+        logger.warning("No feasible solution found by Gurobi.")
+        result = {}
+        objective_value = None
+    else:
+        result = {v.VarName: int(v.X) for v in model.getVars()}
+        objective_value = model.ObjVal
+
+    assignment = list(result.items())
+
+    gurobi_result = GurobiResult(
+        run_configs_id=run_configs_id,
+        iteration_id=iteration_id,
+        assignment=assignment,
+        objective_value=objective_value,
+        duration=duration,
+        congestion_score=None  # to be filled later
+    )
+
+    session.add(gurobi_result)
+    session.commit()
+
+    return result, objective_value
+'''

@@ -6,9 +6,6 @@ import gzip
 import os
 from pathlib import Path
 from collections import defaultdict
-from dimod import SimulatedAnnealingSampler, BinaryQuadraticModel
-from dwave.system import EmbeddingComposite, DWaveSampler, LeapHybridSampler
-from dwave.cloud import Client
 from models import QAResult
 import logging
 from typing import Any, Dict
@@ -24,6 +21,7 @@ def get_api_token() -> str:
 
 
 def authenticate_with_token(token: str) -> bool:
+    from dwave.system import DWaveSampler
     try:
         sampler = DWaveSampler(token=token)
         logger.info(f"Connected to D-Wave. Solver: {sampler.solver.name}")
@@ -74,32 +72,83 @@ def qa_testing(
     """
     # --- Authentication ---
     api_token = get_api_token()
-    #print("api_token: ", api_token)
-    if authenticate_with_token(api_token):
-        logger.info("Authentication successful. QA profile loaded.")
-    else:
-        logger.error("Authentication failed. Invalid API token.")
-        raise PermissionError("Invalid API token for QA profile.")
 
-    # --- QUBO to BQM ---
-    bqm = BinaryQuadraticModel.from_qubo(Q)
+
 
     # --- Run sampler ---
     start_time = time.perf_counter()
     logger.info("Starting QA testing with comp_type: %s", comp_type)
     if comp_type == 'sa':
-        sampler = SimulatedAnnealingSampler()
-        response = sampler.sample(bqm, num_reads=num_reads)
+            # --- QUBO to BQM ---
+        from dimod import BinaryQuadraticModel
+        from dimod import SimulatedAnnealingSampler
+        bqm = BinaryQuadraticModel.from_qubo(Q)
+        sampler = SimulatedAnnealingSampler(token=api_token)
+        response = sampler.sample(bqm, num_reads=num_reads, label="Traffic Optimization sa")
         total_annealing_time_s = time.perf_counter() - start_time  # No direct timing info; use measured wall-clock
 
     elif comp_type == 'hybrid':
-        sampler = LeapHybridSampler(connection_close = True)
-        response = sampler.sample(bqm)
+            # --- QUBO to BQM ---
+        from dimod import BinaryQuadraticModel, Binary
+        from dwave.system import LeapHybridSampler
+        bqm = BinaryQuadraticModel.from_qubo(Q)
+        sampler = LeapHybridSampler(connection_close = True, token=api_token)
+        response = sampler.sample(bqm,label="Traffic Optimization hybrid BQM")
         total_annealing_time_s = response.info.get('run_time', 0) / 1_000_000  # µs to s
 
+    elif comp_type == 'hybrid_cqm':
+
+        # Build CQM from Q + constraints
+        from dimod import ConstrainedQuadraticModel, QuadraticModel, Binary
+        from dwave.system import LeapHybridCQMSampler
+        cqm = ConstrainedQuadraticModel()
+        qm = QuadraticModel()
+
+
+        # Create and register variable names
+        x_vars = {i: f"x_{i}" for i in range(n * t)}
+        for name in x_vars.values():
+            qm.add_variable("BINARY", name)
+
+        #print("CQM variables created:", x_vars)
+
+        # Add QUBO terms
+        for (i, j), value in Q.items():
+            if i in x_vars and j in x_vars:
+                if i == j:
+                    qm.add_linear(x_vars[i], value)
+                else:
+                    qm.add_quadratic(x_vars[i], x_vars[j], value)
+
+        # Set objective once
+        cqm.set_objective(qm)
+
+
+
+        print("CQM objective set with", len(Q), "terms")
+        # Add one-hot constraints: one route per vehicle
+        for i in range(n):
+            terms = [x_vars[i * t + k] for k in range(t)]
+            cqm.add_constraint(sum(Binary(v) for v in terms) == 1, label=f"one_hot_vehicle_{i}")
+
+
+
+        print("CQM constraints added:", len(cqm.constraints))
+        solver = LeapHybridCQMSampler(connection_close = True, token=api_token)
+        print("Using LeapHybridCQMSampler for hybrid CQM")
+        response = solver.sample_cqm(cqm, label="Traffic Optimization hybrid CQM")
+        print("Hybrid CQM response:")
+        total_annealing_time_s = response.info.get('run_time', 0) / 1_000_000
+
+
+
     elif comp_type == 'qpu':
-        sampler = EmbeddingComposite(DWaveSampler())
-        response = sampler.sample(bqm, num_reads=num_reads)
+        # --- QUBO to BQM ---
+        from dimod import BinaryQuadraticModel, Binary
+        from dwave.system import DWaveSampler, EmbeddingComposite
+        bqm = BinaryQuadraticModel.from_qubo(Q)
+        sampler = EmbeddingComposite(DWaveSampler(token=api_token))
+        response = sampler.sample(bqm, num_reads=num_reads, label="Traffic Optimization QPU")
         annealing_time_us = response.info['timing']['annealing_time']  # per read (µs)
         total_annealing_time_s = (annealing_time_us * num_reads) / 1_000_000  # µs to s
 
@@ -113,22 +162,39 @@ def qa_testing(
     # --- Process results ---
     record = response.first
     best_sample, energy = record[:2]
-    sample_values = list(best_sample.values())
-
-    # Check validity (placeholder: always True)
-    assignment = [int(x) for x in sample_values]
+    #sample_values = list(best_sample.values())
 
     # Robust assignment validity check (handles padding)
     if vehicle_routes_df is None or vehicle_ids is None:
         raise ValueError("vehicle_routes_df and vehicle_ids must not be None for assignment validity check.")
 
+    # Check validity (placeholder: always True)
+    # --- Extract assignment and validate ---
+    if comp_type == 'hybrid_cqm':
+        record = response.first
+        best_sample, energy = record[:2]
+        assignment = [int(best_sample[f"x_{i * t + k}"]) for i in range(n) for k in range(t)]
+        print("Hybrid CQM assignment:", assignment)
+    else:
+        record = response.first
+        best_sample, energy = record[:2]
+        assignment = [int(x) for x in best_sample.values()]
+        print("Assignment:", assignment)
+
+    # --- Check validity for all modes ---
     invalid_assignment_vehicles = []
     for i, vehicle_id in enumerate(vehicle_ids):
         assignment_slice = assignment[i * t : (i + 1) * t]
         if assignment_slice.count(1) != 1:
             invalid_assignment_vehicles.append(vehicle_id)
+
     assignment_valid = len(invalid_assignment_vehicles) == 0
     invalid_assignment_vehicles_str = ",".join(str(v) for v in invalid_assignment_vehicles)
+
+
+
+
+
 
     # --- Save QUBO matrix to file ---
     def save_qubo(Q, filepath):

@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from src.modules.models import engine, CongestionMap
 from src.modules.get_congestion_weights import get_congestion_weights
 from src.modules.filter_routes_for_qubo import filter_vehicles_by_congested_edges_and_limit
-from src.modules.qubo_matrix import qubo_matrix
+from src.modules.qubo_matrix_pen_on_diagonals import qubo_matrix
 from src.modules.generate_congestion import generate_congestion
 from src.modules.config import K_ALTERNATIVES, LAMBDA_STRATEGY, LAMBDA_VALUE, DIST_THRESH, SPEED_DIFF_THRESH
 

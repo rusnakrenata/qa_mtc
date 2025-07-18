@@ -11,6 +11,7 @@ src/__pycache__
 src/modules/cache
 src/modules/__pycache__
 src/modules/files_csv
+src/modules/files_html
 src/modules/qubo_matrices
 qa_mtc/gurobi.lic
 

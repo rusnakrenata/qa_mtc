@@ -171,7 +171,7 @@ def get_congestion_weights(
                 vehicle2,
                 vehicle1_route,
                 vehicle2_route,
-                sum(congestion_score/2) as weighted_congestion_score
+                sum(congestion_score) as weighted_congestion_score
             FROM trafficOptimization.congestion_map            
                 WHERE iteration_id = @iteration
                 AND run_configs_id = @run_configs_id

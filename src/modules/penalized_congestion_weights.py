@@ -93,25 +93,25 @@ def penalized_congestion_weights(
                     pair2 = (vj, k2 + 1)
                     w[i, j, k1, k2] = (penalty_matrix[i, k1] + penalty_matrix[j, k2])/num_vehicles
                     if key in weights_lookup:
-                        w[i, j, k1, k2] += weights_lookup[key]*10*0.5 #time window and alfa
+                        w[i, j, k1, k2] += weights_lookup[key]
                     elif (pair1 in valid_pairs) and (pair2 in valid_pairs):
                         w[i, j, k1, k2] += 0.0 
                     elif (pair1 in invalid_pairs) or (pair2 in invalid_pairs):
                         w[i, j, k1, k2] += 0.0
-    
+    '''
     nonzero = (w != 0) 
     if np.any(nonzero):
         min_w = w[nonzero].min()
         max_w = w[nonzero].max()
         scale = max_w - min_w + 1e-9
-        w[nonzero] = (w[nonzero] - min_w) / scale
-        w[nonzero] = np.round(w[nonzero], 7)
+        #w[nonzero] = (w[nonzero] - min_w) / scale
+        #w[nonzero] = np.round(w[nonzero], 7)
         w_max = 1.0
     else:
         w_max = 0.0
-
+    '''
     
     # Penalty values (R) remain as R, not normalized
-    logger.info(f"Normalized weights: min={min_w if np.any(nonzero) else 0.0}, max={w_max if np.any(nonzero) else 0.0}, invalid pairs: {len(invalid_pairs)}")
+    # logger.info(f"Normalized weights: min={min_w if np.any(nonzero) else 0.0}, max={w_max if np.any(nonzero) else 0.0}, invalid pairs: {len(invalid_pairs)}")
     return w.tolist(), w_max, penalty_matrix
  

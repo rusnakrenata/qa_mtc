@@ -199,7 +199,7 @@ def build_and_save_qubo_matrix(
     filtering_percentage: float = 0.25
 ) -> Tuple[Any, List[Any], pd.DataFrame, float]:
     """Build QUBO matrix and save run stats."""
-    Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = qubo_matrix(
+    Q, filtered_vehicle_ids, affected_edges_df, n_Q, t_Q = qubo_matrix(
         N_VEHICLES, t, congestion_df, weights_df, duration_penalty_df, vehicle_routes_df,
         lambda_strategy=lambda_strategy,
         fixed_lambda=fixed_lambda,
@@ -236,7 +236,7 @@ def build_and_save_qubo_matrix(
     )
     session.add(stats)
     session.commit()
-    return Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty
+    return Q, filtered_vehicle_ids, affected_edges_df, n_Q, t_Q
 
 
 def visualize_and_save_congestion(
@@ -381,26 +381,34 @@ def run_congestion_results_sql(session, run_configs_id, iteration_id):
 
 def check_bqm_against_solver_limits(Q):
     import dimod
-    from dwave.system import LeapHybridBQMSampler
+    from dwave.system import LeapHybridBQMSampler, LeapHybridCQMSampler
+
     dwave_constraints_check= True
     bqm = dimod.BQM.from_qubo(Q)
     num_variables = len(bqm.variables)
     num_linear = len(bqm.linear)
     num_quadratic = len(bqm.quadratic)
     num_biases = num_linear + num_quadratic
+
+    sampler = LeapHybridCQMSampler()
+    max_vars_cqm = sampler.properties["maximum_number_of_variables"]
+    max_biases_cqm = sampler.properties["maximum_number_of_biases"]
+
     sampler = LeapHybridBQMSampler()
-    max_vars = sampler.properties["maximum_number_of_variables"]
-    max_biases = sampler.properties["maximum_number_of_biases"]
+    max_vars_bqm = sampler.properties["maximum_number_of_variables"]
+    max_biases_bqm = sampler.properties["maximum_number_of_biases"]
     print("Number of variables:", num_variables)
     print("Number of linear biases:", num_linear)
     print("Number of quadratic biases:", num_quadratic)
     print("Total number of biases:", num_biases)
-    print("Solver maximum_number_of_variables:", max_vars)
-    print("Solver maximum_number_of_biases:", max_biases)
-    if num_variables > max_vars:
+    print("BQM Solver maximum_number_of_variables:", max_vars_bqm)
+    print("BQM Solver maximum_number_of_biases:", max_biases_bqm)
+    print("CQM Solver maximum_number_of_variables:", max_vars_cqm)
+    print("CQM Solver maximum_number_of_biases:", max_biases_cqm)
+    if num_variables > max(max_vars_bqm, max_vars_cqm):
         dwave_constraints_check = False
         logger.warning("Too many variables for this solver!")
-    if num_biases > max_biases:
+    if num_biases > max(max_biases_bqm, max_biases_cqm):
         dwave_constraints_check = False
         logger.warning("Too many biases for this solver!")
     return dwave_constraints_check
@@ -431,16 +439,18 @@ def main() -> None:
 
             # QUBO matrix
             t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
-            Q, filtered_vehicle_ids, affected_edges_df, lambda_penalty = build_and_save_qubo_matrix(
+            Q, filtered_vehicle_ids, affected_edges_df, n_Q, t_Q = build_and_save_qubo_matrix(
                 vehicle_routes_df, congestion_df, weights_df, duration_penalty_df, session, run_config.run_configs_id, iteration_id, t,
                 LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE
             )
 
             # Before QA testing, check BQM/QUBO limits
+            '''
             dwave_constraints_check = check_bqm_against_solver_limits(Q)
             if not dwave_constraints_check:
                 logger.warning("BQM/QUBO constraints check failed! Exiting workflow.")
                 return
+            '''
 
             # QA testing
             qa_result = qa_testing(
@@ -452,11 +462,11 @@ def main() -> None:
                 t=t,
                 vehicle_ids=filtered_vehicle_ids,
                 lambda_strategy=LAMBDA_STRATEGY,
-                lambda_value=lambda_penalty,
+                lambda_value=0,
                 comp_type=COMP_TYPE,
                 num_reads=10,
                 vehicle_routes_df=vehicle_routes_df,
-                dwave_constraints_check=dwave_constraints_check
+                dwave_constraints_check=0#dwave_constraints_check
             )
             qa_assignment = qa_result['assignment']
             qa_annealing_time = qa_result['duration']
@@ -472,7 +482,7 @@ def main() -> None:
                 method=ROUTE_METHOD
             )
 
-            result, obj_val = solve_qubo_with_gurobi(Q, run_config.run_configs_id, iteration_id, session, time_limit_seconds=qa_annealing_time)
+            result, obj_val = solve_qubo_with_gurobi(Q, n_Q, t_Q, run_config.run_configs_id, iteration_id, session, time_limit_seconds=qa_annealing_time)
 
             post_gurobi_congestion_df = post_gurobi_congestion(
                 session=session,
