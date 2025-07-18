@@ -13,8 +13,7 @@ from generate_congestion import generate_congestion
 from plot_congestion_heatmap import plot_congestion_heatmap_interactive
 from get_congestion_weights import get_congestion_weights
 from qubo_matrix import qubo_matrix
-from compute_shortest_routes_dist import compute_shortest_routes_dist
-from compute_shortest_routes_dur import compute_shortest_routes_dur 
+from compute_shortest_routes import compute_shortest_routes
 from compute_random_routes import compute_random_routes
 from post_qa_congestion import post_qa_congestion
 from qa_testing import qa_testing
@@ -299,7 +298,7 @@ def save_congestion_summary(
     shortest_routes_dis_df: pd.DataFrame,
     random_routes_df: pd.DataFrame,
     post_gurobi_df: pd.DataFrame,
-    run_config: RunConfig,
+    run_configs_id: RunConfig,
     iteration_id: int
 ) -> None:
     """Save congestion summary to the database."""
@@ -314,7 +313,7 @@ def save_congestion_summary(
     merged = merged.fillna(0)
     records = [
         CongestionSummary(
-            run_configs_id=run_config.run_configs_id,
+            run_configs_id=run_configs_id,
             iteration_id=iteration_id,
             edge_id=int(row['edge_id']),
             congestion_all=float(row['congestion_all']),
@@ -450,34 +449,71 @@ def compute_objective_value(Q: np.ndarray, routes: dict, filtered_vehicle_ids: l
     return float(obj)
 
 
+def load_iteration_data(session, run_configs_id: int, iteration_id: int):
+    """Load existing city, vehicle, route, and congestion data from the database."""
+    if CENTER_COORDS is not None:
+        # Look for existing city subset with matching coordinates
+        lat, lon = CENTER_COORDS  # type: ignore
+        city = session.query(City).filter_by(
+            name=CITY_NAME,
+            center_lat=lat,
+            center_lon=lon,
+            radius_km=RADIUS_KM,
+            is_subset=True
+        ).first()
+        
+    else:
+        # Look for existing full city
+        city = session.query(City).filter_by(
+            name=CITY_NAME,
+            is_subset=False
+        ).first()
 
-def main() -> None:
+    print(f"Loaded city: {city.name} (ID: {city.city_id})")
+    nodes, edges = get_city_data_from_db(session, city.city_id)
+    
+    vehicles_gdf = pd.read_sql(
+        sa_text("SELECT * FROM vehicles WHERE run_configs_id = :rc AND iteration_id = :it"),
+        session.bind,
+        params={"rc": run_configs_id, "it": iteration_id}
+    )
+
+    vehicle_routes_df = pd.read_sql(
+        sa_text("SELECT * FROM vehicle_routes WHERE run_configs_id = :rc AND iteration_id = :it"),
+        session.bind,
+        params={"rc": run_configs_id, "it": iteration_id}
+    )
+
+    congestion_df = pd.read_sql(
+        sa_text("SELECT * FROM congestion_map WHERE run_configs_id = :rc AND iteration_id = :it"),
+        session.bind,
+        params={"rc": run_configs_id, "it": iteration_id}
+    )
+
+    return edges, vehicles_gdf, vehicle_routes_df, congestion_df
+
+
+def main(RC_ID, IT_ID) -> None:
     """Main workflow for traffic simulation and QUBO optimization."""
     start_time = datetime.now()
     try:
         with create_db_session() as session:
-            logger.info("Starting workflow at: %s", start_time)
-            city = get_or_create_city(session)
-            nodes, edges = get_city_data_from_db(session, city.city_id)
-            if not isinstance(edges, gpd.GeoDataFrame):
-                edges = gpd.GeoDataFrame(edges)
-            run_config = get_or_create_run_config_for_city(session, city)
-            iteration_id = create_simulation_iteration(session, run_config.run_configs_id)
-            if iteration_id is None:
-                return
-            vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id, attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES)
-            vehicle_routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles_gdf, edges)
-            congestion_df = compute_and_store_congestion(session, run_config.run_configs_id, iteration_id)
-            weights_df, duration_penalty_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
+            edges, vehicles_gdf, vehicle_routes_df, congestion_df = load_iteration_data(session, RC_ID, IT_ID)
+            weights_df, duration_penalty_df = get_congestion_weights(session, RC_ID, IT_ID)
             weights_df.to_csv(CONGESTION_WEIGHTS_FILENAME, index=False)
 
             # Filtering for QUBO
             all_vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
 
             # QUBO matrix
-            t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
+            t = get_k_alternatives(session, RC_ID, IT_ID)
+
+            new_iteration_id = create_simulation_iteration(session, RC_ID)
+            if new_iteration_id is None:
+                logger.warning("No new iteration created. Aborting optimization.")
+                return
             Q, filtered_vehicle_ids, affected_edges_df, n_Q, t_Q, lambda_penalty = build_and_save_qubo_matrix(
-                vehicle_routes_df, congestion_df, weights_df, duration_penalty_df, session, run_config.run_configs_id, iteration_id, t,
+                vehicle_routes_df, congestion_df, weights_df, duration_penalty_df, session, RC_ID, new_iteration_id, t,
                 LAMBDA_STRATEGY, LAMBDA_VALUE, FILTERING_PERCENTAGE
             )
 
@@ -492,8 +528,8 @@ def main() -> None:
             # QA testing
             qa_result = qa_testing(
                 Q=Q,
-                run_configs_id=run_config.run_configs_id,
-                iteration_id=iteration_id,
+                run_configs_id=RC_ID,
+                iteration_id=new_iteration_id,
                 session=session,
                 n=len(filtered_vehicle_ids),
                 t=t,
@@ -511,20 +547,20 @@ def main() -> None:
             # Post-QA congestion
             post_qa_congestion_df, selected_routes = post_qa_congestion(
                 session=session,
-                run_configs_id=run_config.run_configs_id,
-                iteration_id=iteration_id,
+                run_configs_id=RC_ID,
+                iteration_id=new_iteration_id,
                 all_vehicle_ids=all_vehicle_ids,
                 optimized_vehicle_ids=filtered_vehicle_ids,
                 qa_assignment=qa_assignment,
                 method=ROUTE_METHOD
             )
 
-            result, obj_val = solve_qubo_with_gurobi(Q, n_Q, t_Q, run_config.run_configs_id, iteration_id, session, time_limit_seconds=qa_annealing_time)
+            result, obj_val = solve_qubo_with_gurobi(Q, n_Q, t_Q, RC_ID, new_iteration_id, session, time_limit_seconds=qa_annealing_time)
 
             post_gurobi_congestion_df, gurobi_routes = post_gurobi_congestion(
                 session=session,
-                run_configs_id=run_config.run_configs_id,
-                iteration_id=iteration_id,
+                run_configs_id=RC_ID,
+                iteration_id=new_iteration_id,
                 all_vehicle_ids=all_vehicle_ids,
                 optimized_vehicle_ids=filtered_vehicle_ids,
                 gurobi_assignment=result,
@@ -539,9 +575,9 @@ def main() -> None:
             post_gurobi_congestion_df = post_gurobi_congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
             post_gurobi_congestion_df = pd.DataFrame(post_gurobi_congestion_df)
 
-            random_routes_df, random_routes = compute_random_routes(session, run_config.run_configs_id, iteration_id)
-            shortest_routes_dur_df, shortest_routes_dur = compute_shortest_routes_dur(session, run_config.run_configs_id, iteration_id)
-            shortest_routes_dis_df, shortest_routes_dis = compute_shortest_routes_dist(session, run_config.run_configs_id, iteration_id)
+            #random_routes_df, random_routes = compute_random_routes(session, RC_ID, IT_ID, store_results=False)
+            #shortest_routes_dur_df, shortest_routes_dur = compute_shortest_routes(session, RC_ID, IT_ID, method="duration",store_results=False)
+            #shortest_routes_dis_df, shortest_routes_dis = compute_shortest_routes(session, RC_ID, IT_ID, method="distance",store_results=False)
 
 
             selected_routes_dict = {
@@ -563,50 +599,27 @@ def main() -> None:
             gurobi_obj_val = compute_objective_value(Q, gurobi_routes_dict, filtered_vehicle_ids, t)
             print(f"Gurobi Objective Value: {gurobi_obj_val}")
             
-            random_routes_dict = {
-                sr.vehicle_id: sr.route_id - 1  # Subtract 1 to make route index zero-based!
-                for sr in random_routes
-            }
-
-            random_obj_val = compute_objective_value(Q, random_routes_dict, filtered_vehicle_ids, t)
-            print(f"Random Objective Value: {random_obj_val}")
-
-            shortest_routes_dur_dict = {
-                sr.vehicle_id: sr.route_id - 1  # Subtract 1 to make route index zero-based!
-                for sr in shortest_routes_dur
-            }
-
-            shortest_dur_obj_val = compute_objective_value(Q, shortest_routes_dur_dict, filtered_vehicle_ids, t)
-            print(f"Shortest DUR Objective Value: {shortest_dur_obj_val}")
-
-            shortest_routes_dis_dict = {
-                sr.vehicle_id: sr.route_id - 1  # Subtract 1 to make route index zero-based!
-                for sr in shortest_routes_dis
-            }
-
-            shortest_dis_obj_val = compute_objective_value(Q, shortest_routes_dis_dict, filtered_vehicle_ids, t)
-            print(f"Shortest DIS Objective Value: {shortest_dis_obj_val}")
-
+            
 
             objective_values = [
             ("qa", qa_obj_val),
             ("gurobi", gurobi_obj_val),
-            ("random", random_obj_val),
-            ("shortest_duration", shortest_dur_obj_val),
-            ("shortest_distance", shortest_dis_obj_val),
+            ("random", 0),
+            ("shortest_duration", 0),
+            ("shortest_distance", 0),
         ]
 
             # First, clear old entries for this run+iteration (if needed)
             session.query(ObjectiveValue).filter_by(
-                run_configs_id=run_config.run_configs_id,
-                iteration_id=iteration_id
+                run_configs_id=RC_ID,
+                iteration_id=new_iteration_id
             ).delete()
 
             # Then add new records
             records = [
                 ObjectiveValue(
-                    run_configs_id=run_config.run_configs_id,
-                    iteration_id=iteration_id,
+                    run_configs_id=RC_ID,
+                    iteration_id=new_iteration_id,
                     method=comp,
                     objective_value=value,
                 )
@@ -615,35 +628,10 @@ def main() -> None:
 
             session.add_all(records)
             session.commit()
-            logger.info(f"Stored objective values for run_config {run_config.run_configs_id}, iteration {iteration_id}.")
+            logger.info(f"Stored objective values for run_config {RC_ID}, iteration {new_iteration_id}.")
 
 
 
-
-            # Dynamically generate HTML filenames with prefix
-            prefix = f"{run_config.run_configs_id}_{iteration_id}"
-            congestion_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_congestion_heatmap.html"
-            affected_edges_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_affected_edges_heatmap.html"
-            shortest_dur_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_shortest_routes_dur_congestion_heatmap.html"
-            shortest_dis_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_shortest_routes_dis_congestion_heatmap.html"
-            post_qa_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_post_qa_congestion_heatmap.html"
-            random_routes_heatmap_filename = MAPS_OUTPUT_DIR / f"{prefix}_random_routes_congestion_heatmap.html"
-            post_gurobi_heatmap_file =  MAPS_OUTPUT_DIR / f"{prefix}_post_gurobi_congestion_heatmap.html"
-
-            visualize_and_save_congestion(
-                edges, congestion_df, affected_edges_df, shortest_routes_dur_df, shortest_routes_dis_df, post_qa_congestion_df, random_routes_df, post_gurobi_congestion_df,
-                congestion_heatmap_filename,
-                affected_edges_heatmap_filename,
-                shortest_dur_heatmap_filename,
-                shortest_dis_heatmap_filename,
-                post_qa_heatmap_filename,
-                random_routes_heatmap_filename,
-                post_gurobi_heatmap_file
-            )
-
-            save_congestion_summary(session, edges, congestion_df, post_qa_congestion_df, shortest_routes_dur_df, shortest_routes_dis_df, random_routes_df, post_gurobi_congestion_df, run_config, iteration_id)
-            save_dist_dur_summary(session, run_config.run_configs_id, iteration_id)
-            run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 
             logger.info("Workflow completed successfully!")
     except Exception as e:
@@ -653,5 +641,14 @@ def main() -> None:
         logger.info("Total computational time: %s", end_time - start_time)
 
 
+import argparse
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run QUBO traffic optimization pipeline.")
+    parser.add_argument("RC_ID", type=int, help="ID of the existing run_config")
+    parser.add_argument("IT_ID", type=int, help="ID of the existing iteration to start from")
+    args = parser.parse_args()
+
+    main(args.RC_ID, args.IT_ID)
+# This script can be run from the command line with:
+# python main_test.py <run_config_id> <iteration_id>

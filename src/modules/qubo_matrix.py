@@ -21,7 +21,7 @@ def qubo_matrix(
     lambda_strategy: str = "normalized",
     fixed_lambda: Optional[float] = None,
     filtering_percentage: float = 0.25
-) -> Tuple[Dict[Tuple[int, int], float], List[Any], pd.DataFrame, float, float]:
+) -> Tuple[Dict[Tuple[int, int], float], List[Any], pd.DataFrame, float, float, float]:
     """
     Constructs the QUBO dictionary for the traffic assignment problem with 4D weights.
     Args:
@@ -154,4 +154,4 @@ def qubo_matrix(
     #print(Q)
     logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")
     logger.info(f"Total QUBO matrix function time: {time.time() - start_time:.2f}s")
-    return dict(Q), vehicle_ids_filtered, affected_edges_df, n_filtered, t
+    return dict(Q), vehicle_ids_filtered, affected_edges_df, n_filtered, t, lambda_penalty

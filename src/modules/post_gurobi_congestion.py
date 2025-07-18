@@ -15,7 +15,7 @@ def post_gurobi_congestion(
     gurobi_assignment: Union[List[tuple], dict],
     t: int,
     method: str = "duration"
-) -> pd.DataFrame:
+) :
     """
     Recomputes congestion based on the Gurobi-selected vehicle-route assignments and shortest routes for non-optimized vehicles.
     Args:
@@ -160,8 +160,8 @@ def post_gurobi_congestion(
         session.commit()
 
         logger.info(f"Recomputed Gurobi congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
-        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score']))
+        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), gurobi_routes
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_gurobi_congestion: {e}", exc_info=True)
-        return pd.DataFrame()
+        return pd.DataFrame(), None

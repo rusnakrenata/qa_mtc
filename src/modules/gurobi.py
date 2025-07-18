@@ -48,6 +48,8 @@ def solve_qubo_with_gurobi(Q: dict, n: int, t: int, run_configs_id, iteration_id
     # Parse result
     result = {v.VarName: int(v.X) for v in model.getVars()}
     objective_value = model.ObjVal if model.SolCount > 0 else None   
+    best_bound = model.ObjBound if model.SolCount > 0 else None
+    gap = model.MIPGap if model.SolCount > 0 else None
     
 
     # Convert result dict to list of tuples for storage (or just store as dict/JSON)
@@ -59,6 +61,8 @@ def solve_qubo_with_gurobi(Q: dict, n: int, t: int, run_configs_id, iteration_id
         assignment=assignment,
         objective_value=objective_value,
         duration=duration,
+        best_bound=best_bound,
+        gap=gap
         # congestion_score will be filled after post-processing
     )
     session.add(gurobi_result)

@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 def compute_random_routes(
     session: Any,
     run_configs_id: int,
-    iteration_id: int,
-) -> pd.DataFrame:
+    iteration_id: int
+):
     """
     For each vehicle, select a random route and compute congestion.
     Returns a DataFrame with columns ['edge_id', 'congestion_score'].
@@ -38,7 +38,7 @@ def compute_random_routes(
         RandomRoute.iteration_id == iteration_id
     ).delete()
 
-    # Insert new random routes
+# Insert new random routes
     random_route_objs = [
         RandomRoute(
             run_configs_id=run_configs_id,
@@ -51,6 +51,7 @@ def compute_random_routes(
     ]
     session.add_all(random_route_objs)
     session.commit()
+    
 
     # 3. Calculate congestion
     result = session.execute(sa_text(f"""
@@ -72,4 +73,4 @@ def compute_random_routes(
     rows = list(result.fetchall())
     logger.info(f"Computed congestion for {len(rows)} edges using random routes.")
 
-    return pd.DataFrame(rows, columns=["edge_id", "congestion_score"])  # type: ignore
+    return pd.DataFrame(rows, columns=["edge_id", "congestion_score"]), random_route_objs # type: ignore

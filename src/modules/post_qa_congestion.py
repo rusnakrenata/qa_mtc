@@ -14,7 +14,7 @@ def post_qa_congestion(
     optimized_vehicle_ids: List[Any],
     qa_assignment: List[int],
     method: str = "duration"
-) -> pd.DataFrame:
+) :
     """
     Recomputes congestion based on the QA-selected vehicle-route assignments and shortest routes for non-optimized vehicles.
     Args:
@@ -152,9 +152,9 @@ def post_qa_congestion(
         session.commit()
 
         logger.info(f"Recomputed QA congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
-        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score']))
+        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), selected_routes
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_qa_congestion: {e}", exc_info=True)
-        return pd.DataFrame()
+        return pd.DataFrame(), None
         

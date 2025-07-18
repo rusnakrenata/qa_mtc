@@ -83,8 +83,8 @@ def qa_testing(
         from dimod import BinaryQuadraticModel
         from dimod import SimulatedAnnealingSampler
         bqm = BinaryQuadraticModel.from_qubo(Q)
-        sampler = SimulatedAnnealingSampler(token=api_token)
-        response = sampler.sample(bqm, num_reads=num_reads, label="Traffic Optimization sa")
+        sampler = SimulatedAnnealingSampler()
+        response = sampler.sample(bqm, num_reads=num_reads)
         total_annealing_time_s = time.perf_counter() - start_time  # No direct timing info; use measured wall-clock
 
     elif comp_type == 'hybrid':

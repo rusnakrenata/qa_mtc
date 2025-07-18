@@ -243,7 +243,8 @@ class GurobiResult(Base):
     assignment = Column(JSON)  # Store variable assignment as JSON
     objective_value = Column(Float)
     duration = Column(Float)
-    congestion_score = Column(Float)  # Overall congestion after assignment
+    best_bound = Column(Float)       
+    gap = Column(Float)     
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class GurobiRoute(Base):
@@ -259,6 +260,44 @@ class GurobiRoute(Base):
         Index('idx_run_iter_gurobi_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
     )
 
+
+class ShortestRouteDur(Base):
+    __tablename__ = "shortest_routes_duration"
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_shortest_routes_dur', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+
+
+class ShortestRouteDis(Base):
+    __tablename__ = "shortest_routes_distance"
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_shortest_routes_dis', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+
+class ObjectiveValue(Base):
+    __tablename__ = "objective_values"
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    method = Column(String(32), nullable=False)  # 'qa', 'gurobi', 'random', etc.
+    objective_value = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'method'),
+    )
 # Create all tables if they do not exist
 Base.metadata.create_all(engine)
 
