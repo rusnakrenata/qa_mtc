@@ -6,8 +6,8 @@
 #RADIUS_KM = None
 CITY_NAME = "Košice, Slovakia" 
 CENTER_COORDS = (48.7164, 21.2611)
-RADIUS_KM = 1
-N_VEHICLES = 1000
+RADIUS_KM = 3
+N_VEHICLES = 25000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
 MAX_LENGTH = 6000
@@ -17,7 +17,7 @@ DIST_THRESH = 10
 SPEED_DIFF_THRESH = 2
 
 # --- QUBO/QA Parameters ---
-FILTERING_PERCENTAGE = 0.4
+FILTERING_PERCENTAGE = 0.25
 LAMBDA_STRATEGY = "standard"#"penalized"   # or "max_weight"
 LAMBDA_VALUE = None
 COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'

@@ -78,8 +78,10 @@ def compute_shortest_routes_dur(
             FROM congestion_map cm
             JOIN shortest_routes_duration sr1 
                 ON sr1.vehicle_id = cm.vehicle1 AND sr1.route_id = cm.vehicle1_route
+                AND sr1.run_configs_id = :run_config_id AND sr1.iteration_id = :iteration_id
             JOIN shortest_routes_duration sr2 
                 ON sr2.vehicle_id = cm.vehicle2 AND sr2.route_id = cm.vehicle2_route
+                AND sr2.run_configs_id = :run_config_id AND sr2.iteration_id = :iteration_id
             WHERE cm.run_configs_id = :run_config_id 
             AND cm.iteration_id = :iteration_id
             GROUP BY cm.edge_id;

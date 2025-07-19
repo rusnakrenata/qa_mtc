@@ -150,7 +150,7 @@ def qubo_matrix(
                     q2 = q1 +k2
                 else:
                     q2 = q1 -1
-                Q[(q1, q2)] += abs(Q.get((q1, q1), 0)) #lambda_penalty 
+                Q[(q1, q2)] += lambda_penalty#abs(Q.get((q1, q1), 0)) #lambda_penalty 
     #print(Q)
     logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")
     logger.info(f"Total QUBO matrix function time: {time.time() - start_time:.2f}s")
