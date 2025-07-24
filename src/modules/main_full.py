@@ -306,10 +306,13 @@ def save_congestion_summary(
     edges: pd.DataFrame,
     congestion_df: pd.DataFrame,
     post_qa_congestion_df: pd.DataFrame,
+    post_sa_congestion_df: pd.DataFrame,
+    post_tabu_congestion_df: pd.DataFrame,
     shortest_routes_dur_df: pd.DataFrame,
     shortest_routes_dis_df: pd.DataFrame,
     random_routes_df: pd.DataFrame,
     post_gurobi_df: pd.DataFrame,
+    post_cbc_congestion: pd.DataFrame,
     run_config: RunConfig,
     iteration_id: int
 ) -> None:
@@ -318,10 +321,13 @@ def save_congestion_summary(
     merged = pd.DataFrame({'edge_id': edges.drop_duplicates(subset='edge_id')['edge_id']})
     merged = merged.merge(congestion_df_grouped[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_all'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(post_qa_congestion_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_qa'}), on='edge_id', how='left')  # type: ignore
+    merged = merged.merge(post_sa_congestion_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_sa'}), on='edge_id', how='left')  # type: ignore
+    merged = merged.merge(post_tabu_congestion_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_tabu'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dur_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dur'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(shortest_routes_dis_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_shortest_dis'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(random_routes_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_random'}), on='edge_id', how='left')  # type: ignore
     merged = merged.merge(post_gurobi_df[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_gurobi'}), on='edge_id', how='left')  # type: ignore
+    merged = merged.merge(post_cbc_congestion[['edge_id', 'congestion_score']].rename(columns={'congestion_score': 'congestion_post_cbc'}), on='edge_id', how='left')  # type: ignore
     merged = merged.fillna(0)
     records = [
         CongestionSummary(
@@ -330,13 +336,13 @@ def save_congestion_summary(
             edge_id=int(row['edge_id']),
             congestion_all=float(row['congestion_all']),
             congestion_post_qa=float(row['congestion_post_qa']),
-            congestion_post_sa=0,
-            congestion_post_tabu=0,
+            congestion_post_sa=float(row['congestion_post_sa']),
+            congestion_post_tabu=float(row['congestion_post_tabu']),
             congestion_shortest_dur=float(row['congestion_shortest_dur']),
             congestion_shortest_dis=float(row['congestion_shortest_dis']),
             congestion_random=float(row['congestion_random']),
             congestion_post_gurobi=float(row['congestion_post_gurobi']),
-            congestion_post_cbc=0
+            congestion_post_cbc=float(row['congestion_post_cbc'])
         )
         for _, row in merged.iterrows()
     ]
@@ -428,8 +434,8 @@ def check_bqm_against_solver_limits(Q):
         logger.warning("Too many biases for this solver!")
     return dwave_constraints_check
 
-def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes_df, weights_df, duration_penalty_df):
-    qa_assignment, gurobi_assignement, all_filtered_vehicle_ids_list, all_affected_edges =  [], [], [], []
+def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes_df, weights_df, duration_penalty_df, all_vehicle_ids):
+    qa_assignment, sa_assignement, tabu_assignement, gurobi_assignement, cbc_assignement, all_filtered_vehicle_ids_list, all_affected_edges = [], [], [], [], [], [], []
 
     for idx, (filtered_ids, affected_edges_df, total_congestion, size) in enumerate(clusters):
         logger.info(f"Processing cluster {idx + 1}/{len(clusters)}: {size} vehicles, congestion: {total_congestion}")
@@ -442,8 +448,6 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
         t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
         Q, t_Q, lambda_penalty = build_and_save_qubo_matrix(vehicle_routes_df, weights_df, duration_penalty_df, session,
             run_config.run_configs_id, iteration_id, t, LAMBDA_STRATEGY, idx, filtered_ids)
-        
-        n_filtered = len(filtered_ids)
 
         qa_result = qa_testing(
             Q=Q,
@@ -464,8 +468,42 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
         qa_assignment += qa_result['assignment']
 
 
-        gurobi_result, _ = gurobi_testing(Q, n_filtered, t_Q, run_config.run_configs_id, iteration_id, session,
-                                                  time_limit_seconds=qa_result['duration'],
+        sa_result = sa_testing(
+            Q=Q,
+            run_configs_id=run_config.run_configs_id,
+            iteration_id=iteration_id,
+            session=session,
+            n=len(filtered_ids),
+            t=t,
+            vehicle_ids=filtered_ids,
+            num_reads=10,
+            vehicle_routes_df=vehicle_routes_df,
+            cluster_id=idx
+        )
+        sa_assignement += sa_result['assignment']
+
+        tabu_result = tabu_testing(
+            Q=Q,
+            run_configs_id=run_config.run_configs_id,
+            iteration_id=iteration_id,
+            session=session,
+            n=len(filtered_ids),
+            t=t,
+            vehicle_ids=filtered_ids,
+            num_reads=10,
+            vehicle_routes_df=vehicle_routes_df,
+            cluster_id=idx
+        )
+        tabu_assignement += tabu_result['assignment']
+
+        cbc_result = cbc_testing(Q, run_config.run_configs_id, iteration_id, session,
+                                    time_limit_seconds=qa_result['duration'], cluster_id=idx)
+        
+        sorted_cbc = [v for k, v in sorted(cbc_result.items(), key=lambda i: int(i[0].split('_')[1]))]
+        cbc_assignement += sorted_cbc
+
+        gurobi_result, _ = gurobi_testing(Q, t_Q, run_config.run_configs_id, iteration_id, session,
+                                                  time_limit_seconds=60,#qa_result['duration'],
                                                     cluster_id=idx)
         sorted_gurobi = [v for k, v in sorted(gurobi_result.items(), key=lambda i: int(i[0].split('_')[1]))]
         gurobi_assignement += sorted_gurobi
@@ -473,7 +511,7 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
 
         all_filtered_vehicle_ids_list.append(filtered_ids)
 
-    return qa_assignment, gurobi_assignement, all_filtered_vehicle_ids_list, all_affected_edges
+    return qa_assignment, sa_assignement, tabu_assignement, gurobi_assignement, cbc_assignement, all_filtered_vehicle_ids_list, all_affected_edges
 
 def main():
     start = datetime.now()
@@ -500,8 +538,8 @@ def main():
             ]
 
             clusters = clusters[:MAX_CLUSTERS] if MAX_CLUSTERS else clusters
-            qa_assignments, gurobi_assignement, all_filtered_ids, affected_edges = process_clusters(
-                clusters, session, run_config, iteration_id, routes_df, weights_df, duration_penalty_df
+            qa_assignments, sa_assignement, tabu_assignement, gurobi_assignement, cbc_assignement, all_filtered_ids, affected_edges = process_clusters(
+                clusters, session, run_config, iteration_id, routes_df, weights_df, duration_penalty_df, all_vehicle_ids
             )
             session.commit()
 
@@ -509,16 +547,17 @@ def main():
             all_filtered = [vid for sublist in all_filtered_ids for vid in sublist]
 
             post_qa_df, _ = post_qa_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, qa_assignments, ROUTE_METHOD)
-            #post_sa_df, _ = post_sa_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, sa_assignement, ROUTE_METHOD)
-            #post_tabu_df, _ = post_tabu_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, tabu_assignement, ROUTE_METHOD)
+            post_sa_df, _ = post_sa_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, sa_assignement, ROUTE_METHOD)
+            post_tabu_df, _ = post_tabu_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, tabu_assignement, ROUTE_METHOD)
             t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
             post_gurobi_df, _ = post_gurobi_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, gurobi_assignement, t, ROUTE_METHOD)
-           
+            post_cbc_df, _ = post_cbc_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, cbc_assignement, t, ROUTE_METHOD)
+
             post_qa_df = post_qa_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
-            #post_sa_df = post_sa_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
-            #post_tabu_df = post_tabu_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
+            post_sa_df = post_sa_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
+            post_tabu_df = post_tabu_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
             post_gurobi_df = post_gurobi_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
-            
+            post_cbc_df = post_cbc_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
 
             random_df, _ = compute_random_routes(session, run_config.run_configs_id, iteration_id)
             shortest_dur_df, _ = compute_shortest_routes_dur(session, run_config.run_configs_id, iteration_id)
@@ -537,7 +576,7 @@ def main():
                 MAPS_OUTPUT_DIR / f"{prefix}_post_gurobi_congestion_heatmap.html"
             )
 
-            save_congestion_summary(session, edges, congestion_df, post_qa_df, shortest_dur_df, shortest_dis_df, random_df, post_gurobi_df, run_config, iteration_id)
+            save_congestion_summary(session, edges, congestion_df, post_qa_df, post_sa_df, post_tabu_df, shortest_dur_df, shortest_dis_df, random_df, post_gurobi_df, post_cbc_df, run_config, iteration_id)
             save_dist_dur_summary(session, run_config.run_configs_id, iteration_id)
             run_congestion_results_sql(session, run_config.run_configs_id, iteration_id)
 

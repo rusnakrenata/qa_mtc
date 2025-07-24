@@ -1,31 +1,29 @@
 import pandas as pd
 from sqlalchemy import text as sa_text
 import logging
-from typing import Any, List, Union
-from models import GurobiRoute
+from typing import Any, List
+from models import SaSelectedRoute
 
 logger = logging.getLogger(__name__)
 
-def post_gurobi_congestion(
+def post_sa_congestion(
     session: Any,
     run_configs_id: int,
     iteration_id: int,
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
-    gurobi_assignment: List[Any],
-    t: int,
+    sa_assignement: List[int],
     method: str = "duration"
 ) :
     """
-    Recomputes congestion based on the Gurobi-selected vehicle-route assignments and shortest routes for non-optimized vehicles.
+    Recomputes congestion based on the QA-selected vehicle-route assignments and shortest routes for non-optimized vehicles.
     Args:
         session: SQLAlchemy session
         run_config_id: ID of the run configuration
         iteration_id: Iteration number
         all_vehicle_ids: List of all vehicle IDs in the simulation
-        optimized_vehicle_ids: List of vehicle IDs used in QUBO/Gurobi
-        gurobi_assignment: List of (var_name, value) tuples or dict {var_name: value}
-        t: Number of route alternatives per vehicle
+        optimized_vehicle_ids: List of vehicle IDs used in QUBO/QA
+        sa_assignement: List of selected route indices (0-based) for optimized vehicles
         method: 'distance' or 'duration' for non-optimized vehicles
     Returns:
         DataFrame with columns ['edge_id', 'congestion_score']
@@ -33,19 +31,12 @@ def post_gurobi_congestion(
     try:
         vehicle_route_pairs = []
 
-
-
-        # For optimized vehicles, use Gurobi assignment
+        # For optimized vehicles, use QA assignment
+        num_routes = len(sa_assignement) // len(optimized_vehicle_ids)
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
-            # Each vehicle has t variables: x_{q}, where q = idx * t + k
-            assigned_route = None
-            for k in range(t):
-                if gurobi_assignment[idx * t + k] == 1:
-                    assigned_route = k + 1
-                    break
-
-            if assigned_route is None:
-                # fallback: assign shortest route
+            assignment = sa_assignement[num_routes * idx : num_routes * (idx + 1)]
+            if assignment.count(1) != 1:
+                # Assign the shortest route based on the method (duration or distance)
                 sql = sa_text(f'''
                     SELECT route_id FROM vehicle_routes
                     WHERE vehicle_id = :vehicle_id AND run_configs_id = :run_configs_id AND iteration_id = :iteration_id
@@ -58,12 +49,14 @@ def post_gurobi_congestion(
                 })
                 row = result.fetchone()
                 if row is not None:
-                    assigned_route = row.route_id
-                    #logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned shortest route {assigned_route}.")
+                    route_id = row.route_id
+                    #logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assigned shortest route {route_id}.")
                 else:
-                    assigned_route = 1  # fallback if no route found
-                    #logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned first route {assigned_route}.")
-            vehicle_route_pairs.append((vehicle_id, assigned_route))
+                    route_id = 1  # fallback if no route found
+                    #logger.warning(f"Invalid assignment for vehicle {vehicle_id}: not one-hot. Assigned first route {route_id}.")                
+            else:
+                route_id = assignment.index(1) + 1  # 1-based route_id
+            vehicle_route_pairs.append((vehicle_id, route_id))
         logger.info(f"Number of optimized vehicles: {len(optimized_vehicle_ids)}")
 
         # For non-optimized vehicles, assign by shortest (distance/duration)
@@ -77,7 +70,7 @@ def post_gurobi_congestion(
                     WHERE run_configs_id = :run_configs_id AND iteration_id = :iteration_id
                     GROUP BY vehicle_id
                 ),
-                gurobi_routes AS (
+                selected_routes AS (
                     SELECT vr.vehicle_id, max(vr.route_id) as route_id 
                     FROM vehicle_routes vr
                     JOIN shortest_routes sr
@@ -85,7 +78,7 @@ def post_gurobi_congestion(
                     WHERE vr.run_configs_id = :run_configs_id AND vr.iteration_id = :iteration_id
                     GROUP BY vr.vehicle_id
                 )
-                SELECT vehicle_id, route_id FROM gurobi_routes
+                SELECT vehicle_id, route_id FROM selected_routes
             """)
             result = session.execute(sql, {
                 'run_configs_id': run_configs_id,
@@ -95,15 +88,16 @@ def post_gurobi_congestion(
                 if row.vehicle_id in non_optimized:
                     vehicle_route_pairs.append((row.vehicle_id, row.route_id))
 
+       
         # Clear previous data for this run_config and iteration
-        session.query(GurobiRoute).filter(
-            GurobiRoute.run_configs_id == run_configs_id,
-            GurobiRoute.iteration_id == iteration_id
+        session.query(SaSelectedRoute).filter(
+            SaSelectedRoute.run_configs_id == run_configs_id,
+            SaSelectedRoute.iteration_id == iteration_id
         ).delete()
         
         # Insert new selected routes using the model
-        gurobi_routes = [
-            GurobiRoute(
+        selected_routes = [
+            SaSelectedRoute(
                 run_configs_id=run_configs_id,
                 iteration_id=iteration_id,
                 vehicle_id=vehicle_id,
@@ -111,7 +105,7 @@ def post_gurobi_congestion(
             )
             for vehicle_id, route_id in vehicle_route_pairs
         ]
-        session.add_all(gurobi_routes)
+        session.add_all(selected_routes)
         session.commit()
 
         # After building vehicle_route_pairs, check for completeness and uniqueness
@@ -132,7 +126,7 @@ def post_gurobi_congestion(
             WITH 
             filtered_routes AS (
                 SELECT vehicle_id, route_id
-                FROM trafficOptimization.gurobi_routes
+                FROM trafficOptimization.sa_selected_routes
                 WHERE run_configs_id = :run_configs_id 
                 AND iteration_id = :iteration_id
             ),
@@ -153,11 +147,14 @@ def post_gurobi_congestion(
             GROUP BY cm.edge_id;
         """), {'run_configs_id': run_configs_id, 'iteration_id': iteration_id})
         rows = list(result.fetchall())
+        # Optionally, drop the table at the end:
+        # session.execute(sa_text("DROP TABLE selected_routes"))
         session.commit()
 
-        logger.info(f"Recomputed Gurobi congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
-        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), gurobi_routes
+        logger.info(f"Recomputed QA congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
+        return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), selected_routes
     except Exception as e:
         session.rollback()
-        logger.error(f"Error in post_gurobi_congestion: {e}", exc_info=True)
+        logger.error(f"Error in post_qa_congestion: {e}", exc_info=True)
         return pd.DataFrame(), None
+        

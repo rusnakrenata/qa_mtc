@@ -1,5 +1,6 @@
 import time
 import datetime
+from matplotlib.pylab import sample
 import numpy as np
 import json
 import gzip
@@ -43,9 +44,10 @@ def qa_testing(
     lambda_strategy=None,
     lambda_value=None,
     comp_type: str = 'hybrid',
-    num_reads: int = 10,
+    num_reads: int = 1,
     vehicle_routes_df=None,
-    dwave_constraints_check=True
+    dwave_constraints_check=True,
+    cluster_id: int = 0
 ) -> Dict[str, Any]:
     """
     Run QUBO formulation for the car-to-trase assignment using a specified quantum/classical sampler.
@@ -149,7 +151,8 @@ def qa_testing(
         bqm = BinaryQuadraticModel.from_qubo(Q)
         sampler = EmbeddingComposite(DWaveSampler(token=api_token))
         response = sampler.sample(bqm, num_reads=num_reads, label="Traffic Optimization QPU")
-        annealing_time_us = response.info['timing']['annealing_time']  # per read (µs)
+        print(response.info)
+        annealing_time_us = response.info.get("timing", {}).get("qpu_access_time", None)
         total_annealing_time_s = (annealing_time_us * num_reads) / 1_000_000  # µs to s
 
 
@@ -163,6 +166,7 @@ def qa_testing(
     record = response.first
     best_sample, energy = record[:2]
     #sample_values = list(best_sample.values())
+
 
     # Robust assignment validity check (handles padding)
     if vehicle_routes_df is None or vehicle_ids is None:
@@ -179,7 +183,7 @@ def qa_testing(
         record = response.first
         best_sample, energy = record[:2]
         assignment = [int(x) for x in best_sample.values()]
-        print("Assignment:", assignment)
+        #print("Assignment:", assignment)
 
     # --- Check validity for all modes ---
     invalid_assignment_vehicles = []
@@ -207,6 +211,13 @@ def qa_testing(
     qubo_dir.mkdir(parents=True, exist_ok=True)
     save_qubo(Q, filepath)
 
+
+    non_zero_entries = {key: value for key, value in Q.items() if value != 0.0}
+    #print(f"Non-zero entries: {non_zero_entries}")
+    #print(f"Number of non-zero entries: {len(non_zero_entries)}")
+    total_elements = (n*t)** 2
+
+
     # --- Store results in DB ---
     result_record = QAResult(
         run_configs_id=run_configs_id,
@@ -223,7 +234,10 @@ def qa_testing(
         energy=energy,
         duration=total_annealing_time_s,
         qubo_path=str(filepath),
+        qubo_size=n*t,
+        qubo_density=len(non_zero_entries) / total_elements,
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
+        cluster_id = cluster_id,
         dwave_constraints_check=dwave_constraints_check,
         created_at=datetime.datetime.utcnow()
     )

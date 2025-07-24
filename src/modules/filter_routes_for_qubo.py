@@ -1,133 +1,197 @@
 import pandas as pd
-import numpy as np
-import logging
-import networkx as nx
 from igraph import Graph
 import leidenalg
+import logging
+from collections import defaultdict
+
 
 logger = logging.getLogger(__name__)
 
-def select_vehicles_by_leiden_joined_clusters(
+
+def get_clusters_by_connectivity(
     congestion_df: pd.DataFrame,
-    target_size: float,
-    resolution: float = 0.1
-) -> tuple:
+    resolution: float = 0.7,
+    min_cluster_size: int = 100,
+) -> list:
     """
-    Cluster vehicles using Leiden community detection and join clusters until the total number of vehicles
-    reaches or exceeds the target_size. Clusters are added in order of descending total congestion.
+    Get clusters ordered by connectivity (total congestion), starting with the most connected.
+    Ensures clusters are at least min_cluster_size by merging small ones.
+
     Args:
         congestion_df: DataFrame with columns ['edge_id', 'vehicle1', 'vehicle2', 'congestion_score']
-        target_size: Minimum number of vehicles to select (e.g., N_VEHICLES//4)
-        resolution: Resolution parameter for Leiden algorithm (default 1.0)
+        resolution: Resolution parameter for Leiden algorithm (default 0.7)
+        min_cluster_size: Minimum number of vehicles in a cluster
+
     Returns:
-        Tuple: (List of selected vehicle IDs from the joined clusters, DataFrame of affected edges and their congestion score)
+        List of tuples: [(vehicle_ids_list, affected_edges_df, total_congestion, cluster_size), ...]
     """
+
     # Prepare nodes and edges
     edges = list(zip(congestion_df['vehicle1'], congestion_df['vehicle2']))
     weights = list(congestion_df['congestion_score'])
     nodes = set(congestion_df['vehicle1']).union(congestion_df['vehicle2'])
     node_to_idx = {n: i for i, n in enumerate(sorted(nodes))}
     idx_to_node = {i: n for n, i in node_to_idx.items()}
+
     g = Graph()
     g.add_vertices(len(nodes))
     g.add_edges([(node_to_idx[u], node_to_idx[v]) for u, v in edges])
     g.es['weight'] = weights
 
-
-
-    num_nodes = len(set(congestion_df['vehicle1']).union(congestion_df['vehicle2']))
+    # Auto-adjust resolution based on graph density
+    num_nodes = len(nodes)
     num_edges = len(congestion_df)
     density = 2 * num_edges / (num_nodes * (num_nodes - 1))
 
-    # Start with base guess
-    default_resolution = 0.7
-
     if density < 0.01:
-        default_resolution = 0.5  # very sparse
+        computed_resolution = 0.5
     elif density < 0.05:
-        default_resolution = 0.7
+        computed_resolution = 0.7
     elif density < 0.1:
-        default_resolution = 1.0
+        computed_resolution = 1.0
     else:
-        default_resolution = 1.2  # very dense
-    print("RESOLUTION based on density:" , default_resolution)
+        computed_resolution = 1.2
 
-
-    # Leiden partitioning
+    print(f"Graph density: {density:.4f}, suggested resolution: {computed_resolution:.2f}")
+    # Leiden clustering
     part = leidenalg.find_partition(
         g,
         leidenalg.RBConfigurationVertexPartition,
         weights='weight',
-        resolution_parameter=default_resolution
+        resolution_parameter=computed_resolution
     )
-    # Build clusters as lists of vehicle IDs and compute their total congestion
-    cluster_info = []
-    for idx, community in enumerate(part):
+
+    initial_clusters = [list(community) for community in part]
+
+    # Merge small clusters
+    merged_clusters = merge_small_clusters(g, initial_clusters, min_cluster_size)
+
+    # Process clusters
+    clusters_info = []
+    for community in merged_clusters:
+        cluster_size = len(community)
         subgraph = g.subgraph(community)
-        total_weight = sum(subgraph.es['weight']) if subgraph.ecount() > 0 else 0.0
+        total_congestion = sum(subgraph.es['weight']) if subgraph.ecount() > 0 else 0.0
         vehicle_ids = [idx_to_node[i] for i in community]
-        cluster_info.append((total_weight, vehicle_ids))
-    # Sort clusters by total congestion (descending)
-    cluster_info.sort(reverse=True, key=lambda x: x[0])
-    # Join clusters until target_size is reached
-    selected_vehicle_ids = set()
-    for _, vehicle_ids in cluster_info:
-        selected_vehicle_ids.update(vehicle_ids)
-        if len(selected_vehicle_ids) >= target_size:
-            break
-    '''
-    # ✅ ADD THIS BLOCK to include all direct neighbors of selected vehicles
-    neighbor_vehicle_ids = set()
-    for _, row in congestion_df.iterrows():
-        if row['vehicle1'] in selected_vehicle_ids or row['vehicle2'] in selected_vehicle_ids:
-            neighbor_vehicle_ids.update([row['vehicle1'], row['vehicle2']])
-    selected_vehicle_ids.update(neighbor_vehicle_ids)
-    '''
+
+        affected_edges_df = congestion_df[
+            congestion_df['vehicle1'].isin(vehicle_ids) & congestion_df['vehicle2'].isin(vehicle_ids)
+        ][['edge_id', 'congestion_score']]
+
+        if isinstance(affected_edges_df, pd.DataFrame) and not affected_edges_df.empty:
+            affected_edges_df = affected_edges_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
+
+        clusters_info.append((vehicle_ids, affected_edges_df, total_congestion, cluster_size))
+
+    # Sort by total congestion
+    clusters_info.sort(reverse=True, key=lambda x: x[2])
+
+    logger.info(
+        f"Found {len(clusters_info)} clusters with at least {min_cluster_size} vehicles"
+        + f", most connected has {clusters_info[0][3] if clusters_info else 0} vehicles"
+    )
+
+    return clusters_info
 
 
-    selected_vehicle_ids_sorted = sorted(selected_vehicle_ids)
-    logger.info(f"Number of selected vehicle indexes in joined Leiden clusters: {len(selected_vehicle_ids_sorted)}")
-
-    # Filter congestion_df for edges where both vehicles are in the selected set
-    selected_list = list(selected_vehicle_ids_sorted)
-    affected_edges_df = congestion_df[
-        congestion_df['vehicle1'].isin(selected_list) & congestion_df['vehicle2'].isin(selected_list)
-    ][['edge_id', 'congestion_score']]
-    # Group by edge_id and sum congestion_score (in case of duplicates)
-    if isinstance(affected_edges_df, pd.DataFrame) and not affected_edges_df.empty:
-        affected_edges_df = affected_edges_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
-
-    return selected_vehicle_ids_sorted, affected_edges_df
-
-
-def select_vehicles_simple(
-    congestion_df: pd.DataFrame
-) -> tuple:
+def merge_small_clusters(g: Graph, clusters: list[list[int]], min_cluster_size: int) -> list[list[int]]:
     """
-    Simple vehicle filtering without any clustering algorithm.
-    Selects vehicles up to target_size and returns affected edges.
+    Ensures that all clusters are at least min_cluster_size.
+    1. Tries to merge small clusters into larger neighboring clusters.
+    2. Remaining small clusters are grouped together until they reach min_cluster_size.
+
     Args:
-        congestion_df: DataFrame with columns ['edge_id', 'vehicle1', 'vehicle2', 'congestion_score']
-        target_size: Number of vehicles to select
+        g: igraph.Graph object.
+        clusters: List of clusters (each cluster is a list of vertex indices).
+        min_cluster_size: Minimum size a cluster should have.
+
     Returns:
-        Tuple: (List of selected vehicle IDs, DataFrame of affected edges and their congestion score)
+        List of merged clusters (list of vertex index lists).
     """
-    # Get all unique vehicles
-    all_vehicles = set(congestion_df['vehicle1']).union(set(congestion_df['vehicle2']))
-    all_vehicles_sorted = sorted(all_vehicles)
-    
-    # Select vehicles up to target_size
-    selected_vehicle_ids = all_vehicles_sorted
-    logger.info(f"Number of selected vehicles (simple): {len(selected_vehicle_ids)}")
 
-    # Filter congestion_df for edges where both vehicles are in the selected set
-    selected_list = list(selected_vehicle_ids)
-    affected_edges_df = congestion_df[
-        congestion_df['vehicle1'].isin(selected_list) & congestion_df['vehicle2'].isin(selected_list)
-    ][['edge_id', 'congestion_score']]
-    # Group by edge_id and sum congestion_score (in case of duplicates)
-    if isinstance(affected_edges_df, pd.DataFrame) and not affected_edges_df.empty:
-        affected_edges_df = affected_edges_df.groupby('edge_id', as_index=False)['congestion_score'].sum()
+    node_to_cluster = {}
+    cluster_members = {}
+    for cid, cluster in enumerate(clusters):
+        cluster_members[cid] = set(cluster)
+        for node in cluster:
+            node_to_cluster[node] = cid
 
-    return selected_vehicle_ids, affected_edges_df
+    cluster_sizes = {cid: len(members) for cid, members in cluster_members.items()}
+    active_clusters = set(cluster_members.keys())
+    merged_clusters = {}
+    merged_ids = set()
+
+    # Inter-cluster edge weights
+    inter_weights = defaultdict(lambda: defaultdict(float))
+    for edge in g.es:
+        u, v = edge.tuple
+        cu = node_to_cluster[u]
+        cv = node_to_cluster[v]
+        if cu != cv:
+            w = edge["weight"]
+            inter_weights[cu][cv] += w
+            inter_weights[cv][cu] += w
+
+    # Step 1: Merge small clusters into larger neighbors
+    for scid in list(active_clusters):
+        if scid in merged_ids or cluster_sizes[scid] >= min_cluster_size:
+            continue
+
+        neighbors = inter_weights[scid]
+        sorted_neighbors = sorted(neighbors.items(), key=lambda x: -x[1])
+
+        for neighbor_cid, _ in sorted_neighbors:
+            if neighbor_cid in merged_ids or neighbor_cid == scid:
+                continue
+            if cluster_sizes[neighbor_cid] >= min_cluster_size:
+                new_id = max(cluster_members.keys()) + 1
+                new_members = cluster_members[scid] | cluster_members[neighbor_cid]
+                cluster_members[new_id] = new_members
+                cluster_sizes[new_id] = len(new_members)
+
+                # Update mappings
+                for n in new_members:
+                    node_to_cluster[n] = new_id
+
+                # Remove old clusters
+                merged_ids.update({scid, neighbor_cid})
+                active_clusters.discard(scid)
+                active_clusters.discard(neighbor_cid)
+                active_clusters.add(new_id)
+                break
+
+    # Step 2: Collect remaining small clusters
+    remaining_small = [
+        cid for cid in active_clusters
+        if cluster_sizes[cid] < min_cluster_size and cid not in merged_ids
+    ]
+
+    # Group remaining smalls together into batches
+    batched_clusters = []
+    current_batch = set()
+    current_size = 0
+
+    for cid in remaining_small:
+        current_batch.update(cluster_members[cid])
+        current_size += cluster_sizes[cid]
+
+        if current_size >= min_cluster_size:
+            batched_clusters.append(list(current_batch))
+            current_batch = set()
+            current_size = 0
+
+    if current_batch:
+        batched_clusters.append(list(current_batch))  # Add leftovers even if below threshold
+
+    # Step 3: Return all valid clusters
+    final_clusters = [
+        list(cluster_members[cid])
+        for cid in active_clusters
+        if cid not in merged_ids and cluster_sizes[cid] >= min_cluster_size
+    ] + batched_clusters
+
+    return final_clusters
+
+
+
 

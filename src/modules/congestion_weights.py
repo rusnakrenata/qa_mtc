@@ -75,5 +75,5 @@ def congestion_weights(
                         w[i, j, k1, k2] = 0.0
                     elif (pair1 in invalid_pairs) or (pair2 in invalid_pairs):
                         w[i, j, k1, k2] = 0.0
-    logger.info(f"w_max = {w_max}, invalid pairs: {len(invalid_pairs)}, invalid pairs: {invalid_pairs}")
+    #logger.info(f"w_max = {w_max}, invalid pairs: {len(invalid_pairs)}, invalid pairs: {invalid_pairs}")
     return w.tolist(), w_max

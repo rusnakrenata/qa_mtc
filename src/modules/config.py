@@ -5,8 +5,8 @@
 #CENTER_COORDS = None#(48.7208, 21.2575)
 #RADIUS_KM = None
 CITY_NAME = "Košice, Slovakia" 
-CENTER_COORDS = (48.7164, 21.2611)
-RADIUS_KM = 3
+CENTER_COORDS =None#(48.7164, 21.2611)
+RADIUS_KM = None#1
 N_VEHICLES = 25000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
@@ -22,6 +22,8 @@ LAMBDA_STRATEGY = "standard"#"penalized"   # or "max_weight"
 LAMBDA_VALUE = None
 COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
+MIN_CLUSTER_SIZE = 4000
+MAX_CLUSTERS = 1
 
 # Vehicle origin and destination
 ATTRACTION_POINT = None#(48.719390, 21.258057)

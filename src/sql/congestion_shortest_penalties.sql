@@ -27,7 +27,7 @@ penalties AS (
 ),
 qa AS (
     SELECT SUM(p.penalty) AS qa_penalty
-    FROM selected_routes sr
+    FROM qa_selected_routes sr
     JOIN penalties p 
         ON p.vehicle_id = sr.vehicle_id
        AND p.route_id = sr.route_id

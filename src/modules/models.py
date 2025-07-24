@@ -164,6 +164,9 @@ class QAResult(Base):
     energy = Column(Float)
     duration = Column(Float)
     qubo_path = Column(String(255))
+    qubo_size = Column(Integer)
+    qubo_density = Column(Float)
+    cluster_id = Column(Integer)
     invalid_assignment_vehicles = Column(String(2000), nullable=True)
     dwave_constraints_check = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -173,6 +176,7 @@ class QuboRunStats(Base):
     qubo_run_stats_id = Column(Integer, primary_key=True, autoincrement=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
+    cluster_id = Column(Integer, nullable=False)
     filtering_percentage = Column(Float, nullable=True)
     n_vehicles = Column(Integer, nullable=False)
     n_filtered_vehicles = Column(Integer, nullable=False)
@@ -187,15 +191,18 @@ class CongestionSummary(Base):
     edge_id = Column(Integer, nullable=False)
     congestion_all = Column(Float, nullable=True)
     congestion_post_qa = Column(Float, nullable=True)
+    congestion_post_sa = Column(Float, nullable=True)
+    congestion_post_tabu = Column(Float, nullable=True)
     congestion_shortest_dur = Column(Float, nullable=True)
     congestion_shortest_dis = Column(Float, nullable=True)
     congestion_random = Column(Float, nullable=True)
     congestion_post_gurobi = Column(Float, nullable=True)
+    congestion_post_cbc = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class SelectedRoute(Base):
+class QASelectedRoute(Base):
     """SelectedRoute table: stores the routes selected by QA optimization for each vehicle."""
-    __tablename__ = 'selected_routes'
+    __tablename__ = 'qa_selected_routes'
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
     vehicle_id = Column(Integer, nullable=False)
@@ -203,7 +210,7 @@ class SelectedRoute(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (
         PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
-        Index('idx_run_iter_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+        Index('idx_run_iter_qa_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
     )
 
 class RandomRoute(Base):
@@ -245,6 +252,7 @@ class GurobiResult(Base):
     duration = Column(Float)
     best_bound = Column(Float)       
     gap = Column(Float)     
+    cluster_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class GurobiRoute(Base):
@@ -298,9 +306,94 @@ class ObjectiveValue(Base):
     __table_args__ = (
         PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'method'),
     )
-# Create all tables if they do not exist
-Base.metadata.create_all(engine)
 
+
+class SaResult(Base):
+    __tablename__ = 'sa_results'
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer)
+    iteration_id = Column(Integer)
+    num_reads = Column(Integer)
+    n_vehicles = Column(Integer)
+    k_alternatives = Column(Integer)
+    vehicle_ids = Column(JSON)
+    assignment_valid = Column(Boolean)
+    assignment = Column(JSON)
+    energy = Column(Float)
+    duration = Column(Float)
+    invalid_assignment_vehicles = Column(String(2000), nullable=True)
+    cluster_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+# Create all tables if they do not exist
+
+
+
+class SaSelectedRoute(Base):
+    __tablename__ = 'sa_selected_routes'
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_sa_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+class TabuResult(Base):
+    __tablename__ = 'tabu_results'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    num_reads = Column(Integer, nullable=False)
+    n_vehicles = Column(Integer, nullable=False)
+    k_alternatives = Column(Integer, nullable=False)
+    vehicle_ids = Column(JSON, nullable=False)
+    assignment_valid = Column(Boolean, nullable=False)
+    assignment = Column(JSON, nullable=False)
+    energy = Column(Float, nullable=False)
+    duration = Column(Float, nullable=False)
+    invalid_assignment_vehicles = Column(String(2000), nullable=True)
+    cluster_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TabuSelectedRoute(Base):
+    __tablename__ = 'tabu_selected_routes'
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_sa_selected_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+class CbcResult(Base):
+    __tablename__ = 'cbc_results'
+
+    id = Column(Integer, primary_key=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    assignment = Column(JSON, nullable=False)
+    objective_value = Column(Float)
+    duration = Column(Float)
+    cluster_id = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CbcRoute(Base):
+    __tablename__ = 'cbc_routes'
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    vehicle_id = Column(Integer, nullable=False)
+    route_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        PrimaryKeyConstraint('run_configs_id', 'iteration_id', 'vehicle_id', 'route_id'),
+        Index('idx_run_iter_cbc_routes', 'run_configs_id', 'iteration_id', 'vehicle_id')
+    )
+
+Base.metadata.create_all(engine)
 """
 Database models for the traffic optimization system.
 

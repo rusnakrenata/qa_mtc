@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def compute_shortest_routes_dur(
     session: Any,
-    run_config_id: int,
+    run_configs_id: int,
     iteration_id: int
 ) -> Tuple[pd.DataFrame, List[Any]]:
     """
@@ -25,7 +25,7 @@ def compute_shortest_routes_dur(
             filtered_vehicle_routes AS (
                 SELECT vehicle_id, route_id, duration
                 FROM vehicle_routes
-                WHERE run_configs_id = :run_config_id 
+                WHERE run_configs_id = :run_configs_id 
                 AND iteration_id = :iteration_id
             ),
             shortest_routes AS (
@@ -44,7 +44,7 @@ def compute_shortest_routes_dur(
             FROM shortest_selected_routes;
         """)
         route_result = session.execute(route_sql, {
-            'run_config_id': run_config_id,
+            'run_configs_id': run_configs_id,
             'iteration_id': iteration_id
         })
         route_pairs = route_result.fetchall()
@@ -53,13 +53,13 @@ def compute_shortest_routes_dur(
 
         # Step 2: Delete old records and insert new ones
         session.query(ShortestRouteDur).filter(
-            ShortestRouteDur.run_configs_id == run_config_id,
+            ShortestRouteDur.run_configs_id == run_configs_id,
             ShortestRouteDur.iteration_id == iteration_id
         ).delete()
 
         route_objs = [
             ShortestRouteDur(
-                run_configs_id=run_config_id,
+                run_configs_id=run_configs_id,
                 iteration_id=iteration_id,
                 vehicle_id=row.vehicle_id,
                 route_id=row.route_id,
@@ -78,16 +78,16 @@ def compute_shortest_routes_dur(
             FROM congestion_map cm
             JOIN shortest_routes_duration sr1 
                 ON sr1.vehicle_id = cm.vehicle1 AND sr1.route_id = cm.vehicle1_route
-                AND sr1.run_configs_id = :run_config_id AND sr1.iteration_id = :iteration_id
+                AND sr1.run_configs_id = :run_configs_id AND sr1.iteration_id = :iteration_id
             JOIN shortest_routes_duration sr2 
                 ON sr2.vehicle_id = cm.vehicle2 AND sr2.route_id = cm.vehicle2_route
-                AND sr2.run_configs_id = :run_config_id AND sr2.iteration_id = :iteration_id
-            WHERE cm.run_configs_id = :run_config_id 
+                AND sr2.run_configs_id = :run_configs_id AND sr2.iteration_id = :iteration_id
+            WHERE cm.run_configs_id = :run_configs_id 
             AND cm.iteration_id = :iteration_id
             GROUP BY cm.edge_id;
         """)
         congestion_result = session.execute(congestion_sql, {
-            'run_config_id': run_config_id,
+            'run_configs_id': run_configs_id,
             'iteration_id': iteration_id
         })
         congestion_df = pd.DataFrame(congestion_result.fetchall(), columns=["edge_id", "congestion_score"])
