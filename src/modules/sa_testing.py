@@ -36,14 +36,16 @@ def sa_testing(
     Returns:
         dict: Results including assignment validity, assignment, energy, and duration.
     """
-    start_time = time.perf_counter()
+    start_time_model = time.perf_counter()
     logger.info("Starting Simulated Annealing QUBO solving")
 
     # Run simulated annealing
     bqm = BinaryQuadraticModel.from_qubo(Q)
     sampler = SimulatedAnnealingSampler()
+    start_time_solver = time.perf_counter()
     response = sampler.sample(bqm, num_reads=num_reads)
-    duration = time.perf_counter() - start_time
+    model_duration = time.perf_counter() - start_time_model
+    solver_duration = time.perf_counter() - start_time_solver
 
     # Extract result
     best_sample, energy = response.first.sample, response.first.energy
@@ -73,7 +75,8 @@ def sa_testing(
         assignment_valid=assignment_valid,
         assignment=assignment,
         energy=energy,
-        duration=duration,
+        duration=model_duration,
+        solver_time=solver_duration,
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
         cluster_id = cluster_id,
         created_at=datetime.datetime.utcnow()
@@ -81,7 +84,7 @@ def sa_testing(
     session.add(result_record)
     session.commit()
 
-    logger.info(f"SA result stored: assignment_valid={assignment_valid}, energy={energy}, duration={duration:.2f}s")
+    logger.info(f"SA result stored: assignment_valid={assignment_valid}, energy={energy}, duration={model_duration:.2f}s, solver_time={solver_duration:.2f}s")
 
     return {
         'comp_type': 'sa',
@@ -91,6 +94,6 @@ def sa_testing(
         'assignment_valid': assignment_valid,
         'assignment': assignment,
         'energy': energy,
-        'duration': duration,
+        'duration': model_duration,
         'vehicle_ids': vehicle_ids
     }

@@ -17,80 +17,8 @@ def haversine_np(lat1, lon1, lat2, lon2):
     a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
     return 2 * R * np.arcsin(np.sqrt(a))
 
-def process_group_nondiectional(group_df, dist_thresh, speed_diff_thresh):
-    if len(group_df) < 2:
-        return pd.DataFrame()
 
-    # Use numpy arrays directly instead of pandas operations
-    vehicle_ids = group_df['vehicle_id'].values
-    route_ids = group_df['route_id'].values
-    lats = group_df['lat'].values
-    lons = group_df['lon'].values
-    speeds = group_df['speed'].values
-    edge_id = group_df['edge_id'].iloc[0]  # Same for all in group
-    
-    n = len(group_df)
-    results = []
-    
-    # Vectorized pairwise computations
-    for i in range(n):
-        if i + 1 >= n:
-            break
-            
-        # Vectorized distance calculation for all remaining pairs
-        j_indices = np.arange(i + 1, n)
-        distances = haversine_np(
-            lats[i], lons[i], 
-            lats[j_indices], lons[j_indices]
-        )
-        
-        # Vectorized average speed calculation
-        avg_speeds = (speeds[i] + speeds[j_indices]) / 2.0
-        
-        # Vectorized congestion score calculation with multiple distance factors
-        distance_factors = np.array([0.5, 1.0, 1.5, 2.0])
-        
-        # Broadcast for all factor combinations
-        distances_broadcast = distances[:, np.newaxis]  # Shape: (n_pairs, 1)
-        factors_broadcast = distance_factors[np.newaxis, :]  # Shape: (1, n_factors)
-        avg_speeds_broadcast = avg_speeds[:, np.newaxis]  # Shape: (n_pairs, 1)
-        
-        # Compute scores for all factor-pair combinations
-        scores = np.maximum(
-            (avg_speeds_broadcast - distances_broadcast / factors_broadcast) / avg_speeds_broadcast,
-            0
-        )
-        
-        # Take max across factors for each pair
-        max_scores = np.max(scores, axis=1) * dist_thresh
-        
-        # Filter positive scores
-        valid_mask = max_scores > 0
-        if not valid_mask.any():
-            continue
-            
-        # Create result arrays
-        valid_j_indices = j_indices[valid_mask]
-        valid_scores = max_scores[valid_mask]
-        
-        # Append results in batch
-        for j_idx, score in zip(valid_j_indices, valid_scores):
-            results.append({
-                'edge_id': edge_id,
-                'vehicle_id_a': vehicle_ids[i],
-                'route_id_a': route_ids[i],
-                'vehicle_id_b': vehicle_ids[j_idx],
-                'route_id_b': route_ids[j_idx],
-                'congestion_score': score
-            })
-    
-    if not results:
-        return pd.DataFrame()
-        
-    return pd.DataFrame(results)
-
-
-def process_group(group_df, dist_thresh, speed_diff_thresh):
+def process_group(group_df, time_step):
     if len(group_df) < 2:
         return pd.DataFrame()
 
@@ -139,12 +67,14 @@ def process_group(group_df, dist_thresh, speed_diff_thresh):
             distance = haversine_np(lats[i], lons[i], lats[j], lons[j])
             avg_speed = (speeds[i] + speeds[j]) / 2.0
 
-            distance_factors = np.array([0.5, 1.0, 1.5, 2.0])
-            scores = np.maximum(
-                (avg_speed - distance / distance_factors) / avg_speed,
+            distance_factor = 4.0
+
+            score = np.maximum(
+                (avg_speed - distance / distance_factor) / avg_speed,
                 0
             )
-            max_score = np.max(scores) * dist_thresh
+            
+            max_score = score * time_step
 
             if max_score > 0:
                 results.append({
@@ -165,8 +95,7 @@ def generate_congestion(
     session: Any,
     run_config_id: int,
     iteration_id: int,
-    dist_thresh: float,
-    speed_diff_thresh: float
+    time_step: int = 10,
 ) -> pd.DataFrame:
     """
     Compute and store pairwise congestion scores for all vehicle-route pairs in the database.
@@ -209,7 +138,7 @@ def generate_congestion(
         logger.info(f"Starting parallel processing of {len(group_list)} buckets at: {datetime.now()}")
         results = []
         with ProcessPoolExecutor(max_workers=min(16, multiprocessing.cpu_count())) as executor:
-            futures = [executor.submit(process_group, group.copy(), dist_thresh, speed_diff_thresh) for group in group_list]
+            futures = [executor.submit(process_group, group.copy(), time_step) for group in group_list]
             for future in as_completed(futures):
                 result = future.result()
                 if not result.empty:

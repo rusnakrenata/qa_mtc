@@ -6,8 +6,7 @@ SELECT
     qr.qubo_size,
     qr.qubo_density,
     qr.energy as qa_energy,
-    gr.objective_value as gurobi_energy,
-    dwave_constraints_check
+    gr.objective_value as gurobi_energy
 FROM trafficOptimization.qa_results qr
 JOIN trafficOptimization.gurobi_results gr
     ON gr.run_configs_id = qr.run_configs_id

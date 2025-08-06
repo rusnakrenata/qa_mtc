@@ -9,8 +9,7 @@ SELECT
     sa.energy as sa_energy,
     tr.energy as tabu_energy,
     cbc.objective_value as cbc_energy,
-    gr.objective_value as gurobi_energy,
-    dwave_constraints_check
+    gr.objective_value as gurobi_energy
 FROM trafficOptimization.qa_results qr
 INNER JOIN trafficOptimization.gurobi_results gr
     ON gr.run_configs_id = qr.run_configs_id

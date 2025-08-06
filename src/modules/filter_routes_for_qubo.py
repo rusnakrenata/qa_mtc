@@ -58,13 +58,13 @@ def get_clusters_by_connectivity(
         g,
         leidenalg.RBConfigurationVertexPartition,
         weights='weight',
-        resolution_parameter=computed_resolution
+        resolution_parameter=4.0
     )
 
     initial_clusters = [list(community) for community in part]
 
     # Merge small clusters
-    merged_clusters = merge_small_clusters(g, initial_clusters, min_cluster_size)
+    merged_clusters = initial_clusters#merge_small_clusters(g, initial_clusters, min_cluster_size)
 
     # Process clusters
     clusters_info = []

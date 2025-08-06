@@ -4,28 +4,23 @@
 #CITY_NAME = "Bratislava, Slovakia"
 #CENTER_COORDS = None#(48.7208, 21.2575)
 #RADIUS_KM = None
-CITY_NAME = "Košice, Slovakia" 
-CENTER_COORDS =None#(48.7164, 21.2611)
-RADIUS_KM = None#1
-N_VEHICLES = 25000
+CITY_NAME = "Košice, Slovakia"
+CENTER_COORDS = (48.7164, 21.2611)
+RADIUS_KM = 1.0
+N_VEHICLES = 800
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
 MAX_LENGTH = 6000
 TIME_STEP = 10
 TIME_WINDOW = 300
-DIST_THRESH = 10
-SPEED_DIFF_THRESH = 2
 
 # --- QUBO/QA Parameters ---
-FILTERING_PERCENTAGE = 0.25
-LAMBDA_STRATEGY = "standard"#"penalized"   # or "max_weight"
-LAMBDA_VALUE = None
-COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
+COMP_TYPE = "hybrid_cqm"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
-MIN_CLUSTER_SIZE = 4000
+MIN_CLUSTER_SIZE = 300
 MAX_CLUSTERS = 1
 
 # Vehicle origin and destination
-ATTRACTION_POINT = None#(48.719390, 21.258057)
+ATTRACTION_POINT = None#(51.4816, -3.1791)
 D_ALTERNATIVES = None#3
 

@@ -179,8 +179,7 @@ def compute_and_store_congestion(session, run_configs_id, iteration_id) -> pd.Da
     logger.info("Compute congestion at: %s", datetime.now())
     congestion_df = generate_congestion(
         session,
-        run_configs_id, iteration_id,
-        DIST_THRESH, SPEED_DIFF_THRESH
+        run_configs_id, iteration_id, TIME_STEP
     )
     return congestion_df  # Do not groupby h
 
@@ -204,7 +203,6 @@ def build_and_save_qubo_matrix(
     run_configs_id: int,
     iteration_id: int,
     t: int,
-    lambda_strategy: str,
     cluster_id: int,
     vehicle_ids_filtered: List
 ) -> Tuple[Any, List[Any], pd.DataFrame, float]:
@@ -213,7 +211,7 @@ def build_and_save_qubo_matrix(
         t,  weights_df, duration_penalty_df, 
         vehicle_ids_filtered,
         vehicle_routes_df,
-        lambda_strategy=lambda_strategy,
+        comp_type = COMP_TYPE
     )
     # Find the matrix size
     max_index = 0
@@ -441,7 +439,7 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
 
         t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
         Q, t_Q, lambda_penalty = build_and_save_qubo_matrix(vehicle_routes_df, weights_df, duration_penalty_df, session,
-            run_config.run_configs_id, iteration_id, t, LAMBDA_STRATEGY, idx, filtered_ids)
+            run_config.run_configs_id, iteration_id, t, idx, filtered_ids)
         
         n_filtered = len(filtered_ids)
 
@@ -453,19 +451,18 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
             n=len(filtered_ids),
             t=t,
             vehicle_ids=filtered_ids,
-            lambda_strategy=LAMBDA_STRATEGY,
             lambda_value=lambda_penalty,
             comp_type=COMP_TYPE,
             num_reads=10,
             vehicle_routes_df=vehicle_routes_df,
-            dwave_constraints_check=0,
             cluster_id=idx
         )
         qa_assignment += qa_result['assignment']
 
 
         gurobi_result, _ = gurobi_testing(Q, n_filtered, t_Q, run_config.run_configs_id, iteration_id, session,
-                                                  time_limit_seconds=qa_result['duration'],
+                                                  comp_type=COMP_TYPE,
+                                                  time_limit_seconds=qa_result['solver_time'],
                                                     cluster_id=idx)
         sorted_gurobi = [v for k, v in sorted(gurobi_result.items(), key=lambda i: int(i[0].split('_')[1]))]
         gurobi_assignement += sorted_gurobi

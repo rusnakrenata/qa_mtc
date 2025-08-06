@@ -179,8 +179,7 @@ def compute_and_store_congestion(session, run_configs_id, iteration_id) -> pd.Da
     logger.info("Compute congestion at: %s", datetime.now())
     congestion_df = generate_congestion(
         session,
-        run_configs_id, iteration_id,
-        DIST_THRESH, SPEED_DIFF_THRESH
+        run_configs_id, iteration_id,TIME_STEP
     )
     return congestion_df  # Do not groupby h
 
@@ -447,7 +446,7 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
 
         t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
         Q, t_Q, lambda_penalty = build_and_save_qubo_matrix(vehicle_routes_df, weights_df, duration_penalty_df, session,
-            run_config.run_configs_id, iteration_id, t, LAMBDA_STRATEGY, idx, filtered_ids)
+            run_config.run_configs_id, iteration_id, t,  idx, filtered_ids)
 
         qa_result = qa_testing(
             Q=Q,
@@ -457,12 +456,10 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
             n=len(filtered_ids),
             t=t,
             vehicle_ids=filtered_ids,
-            lambda_strategy=LAMBDA_STRATEGY,
             lambda_value=lambda_penalty,
             comp_type=COMP_TYPE,
             num_reads=10,
             vehicle_routes_df=vehicle_routes_df,
-            dwave_constraints_check=0,
             cluster_id=idx
         )
         qa_assignment += qa_result['assignment']
@@ -497,14 +494,13 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
         tabu_assignement += tabu_result['assignment']
 
         cbc_result = cbc_testing(Q, run_config.run_configs_id, iteration_id, session,
-                                    time_limit_seconds=qa_result['duration'], cluster_id=idx)
-        
+                                    time_limit_seconds=qa_result['solver_time'], cluster_id=idx)
+
         sorted_cbc = [v for k, v in sorted(cbc_result.items(), key=lambda i: int(i[0].split('_')[1]))]
         cbc_assignement += sorted_cbc
 
         gurobi_result, _ = gurobi_testing(Q, t_Q, run_config.run_configs_id, iteration_id, session,
-                                                  time_limit_seconds=60,#qa_result['duration'],
-                                                    cluster_id=idx)
+                                                  time_limit_seconds=qa_result['solver_time'], cluster_id=idx)
         sorted_gurobi = [v for k, v in sorted(gurobi_result.items(), key=lambda i: int(i[0].split('_')[1]))]
         gurobi_assignement += sorted_gurobi
 

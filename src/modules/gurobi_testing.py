@@ -12,7 +12,7 @@ license_path = project_root / "gurobi.lic"
 os.environ["GRB_LICENSE_FILE"] = str(license_path)
 
 
-def gurobi_testing(Q: dict, n:int, t: int, run_configs_id, iteration_id, session, time_limit_seconds: int = 300, cluster_id: int = 0) -> tuple:
+def gurobi_testing(Q: dict, n:int, t: int, run_configs_id, iteration_id, session, comp_type, time_limit_seconds: int = 300, cluster_id: int = 0) -> tuple:
     """
     Solves a QUBO problem using Gurobi.
     Args:
@@ -21,8 +21,9 @@ def gurobi_testing(Q: dict, n:int, t: int, run_configs_id, iteration_id, session
     Returns:
         Dict of variable values and objective value
     """
-    time_limit_seconds = max(time_limit_seconds, 60)  # Ensure at least 1 minute
-    start_time = time.perf_counter()
+    time_limit_seconds = min(time_limit_seconds, 600)  # Ensure at least 1 minute
+
+    start_time_model = time.perf_counter()
     model = Model("QUBO_Traffic")
     model.setParam("TimeLimit", time_limit_seconds)
     model.setParam("OutputFlag", 0)  # show output, set 0 to suppress
@@ -41,9 +42,18 @@ def gurobi_testing(Q: dict, n:int, t: int, run_configs_id, iteration_id, session
     obj = quicksum(Q[i, j] * variables[i] * variables[j] for i, j in Q)
     model.setObjective(obj, GRB.MINIMIZE)
 
+    # Add one-hot constraints for each vehicle
+    if comp_type == "hybrid_cqm":
+        for i in range(n):
+            terms = [variables[i * t + k] for k in range(t)]
+            model.addConstr(quicksum(terms) == 1, name=f"one_hot_vehicle_{i}")
+
+
     # Solve
+    start_time_solver = time.perf_counter()
     model.optimize()
-    duration = time.perf_counter() - start_time
+    model_duration = time.perf_counter() - start_time_model
+    solver_duration = time.perf_counter() - start_time_solver
 
     # Parse result
     result = {v.VarName: int(v.X) for v in model.getVars()}
@@ -60,9 +70,11 @@ def gurobi_testing(Q: dict, n:int, t: int, run_configs_id, iteration_id, session
         iteration_id=iteration_id,
         assignment=assignment,
         objective_value=objective_value,
-        duration=duration,
+        duration=model_duration,
+        solver_time=solver_duration,
         best_bound=best_bound,
         gap=gap,
+        time_limit_seconds =time_limit_seconds,
         cluster_id=cluster_id
         # congestion_score will be filled after post-processing
     )

@@ -41,12 +41,10 @@ def qa_testing(
     n: int,
     t: int,
     vehicle_ids=None,
-    lambda_strategy=None,
     lambda_value=None,
     comp_type: str = 'hybrid',
     num_reads: int = 1,
     vehicle_routes_df=None,
-    dwave_constraints_check=True,
     cluster_id: int = 0
 ) -> Dict[str, Any]:
     """
@@ -62,7 +60,6 @@ def qa_testing(
         t: Number of routes per vehicle
         weights: Weights for the QUBO
         vehicle_ids: IDs of vehicles
-        lambda_strategy: Lambda strategy for the QUBO
         lambda_value: Lambda value for the QUBO
         comp_type: 'test', 'hybrid', or 'qpu'
         num_reads: Number of reads for classical or QPU runs
@@ -159,8 +156,7 @@ def qa_testing(
     else:
         logger.error(f"Unknown comp_type: {comp_type}")
         raise ValueError(f"Unknown comp_type: {comp_type}")
-    duration_qa = time.perf_counter() - start_time
-   
+    model_duration = time.perf_counter() - start_time
 
     # --- Process results ---
     record = response.first
@@ -222,7 +218,6 @@ def qa_testing(
     result_record = QAResult(
         run_configs_id=run_configs_id,
         iteration_id=iteration_id,
-        lambda_strategy=lambda_strategy,
         lambda_value=lambda_value,
         comp_type=comp_type,
         num_reads=num_reads,
@@ -232,19 +227,19 @@ def qa_testing(
         assignment_valid=int(assignment_valid),
         assignment=assignment,
         energy=energy,
-        duration=total_annealing_time_s,
+        duration=model_duration,        
+        solver_time=total_annealing_time_s,
         qubo_path=str(filepath),
         qubo_size=n*t,
         qubo_density=len(non_zero_entries) / total_elements,
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
         cluster_id = cluster_id,
-        dwave_constraints_check=dwave_constraints_check,
         created_at=datetime.datetime.utcnow()
     )
     session.add(result_record)
     session.commit()
 
-    logger.info(f"QA testing complete: assignment_valid={assignment_valid}, energy={energy}, duration={duration_qa:.2f}s")
+    logger.info(f"QA testing complete: assignment_valid={assignment_valid}, energy={energy}, duration={model_duration:.2f}s, total_annealing_time={total_annealing_time_s:.2f}s")
 
     return {
         'comp_type': comp_type,
@@ -255,8 +250,8 @@ def qa_testing(
         'assignment': assignment,
         'energy': energy,
         'qubo_path': str(filepath),
-        'duration': total_annealing_time_s,
-        'lambda_strategy': lambda_strategy,
+        'duration': model_duration,
+        'solver_time': total_annealing_time_s,
         'lambda_value': lambda_value,
         'vehicle_ids': vehicle_ids
     }

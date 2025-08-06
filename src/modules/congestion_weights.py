@@ -1,6 +1,7 @@
 import logging
 import pandas as pd
 import numpy as np
+import random
 from typing import List, Any, Tuple, Set
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ def congestion_weights(
                     if key in weights_lookup:
                         w[i, j, k1, k2] = weights_lookup[key]
                     elif (pair1 in valid_pairs) and (pair2 in valid_pairs):
-                        w[i, j, k1, k2] = 0.0
+                        w[i, j, k1, k2] = 0.0#random.uniform(w_max/5, w_max)
                     elif (pair1 in invalid_pairs) or (pair2 in invalid_pairs):
                         w[i, j, k1, k2] = 0.0
     #logger.info(f"w_max = {w_max}, invalid pairs: {len(invalid_pairs)}, invalid pairs: {invalid_pairs}")

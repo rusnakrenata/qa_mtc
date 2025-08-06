@@ -25,7 +25,7 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
         (result_dict)
     """
     try:
-        start_time = time.perf_counter()
+        start_time_model = time.perf_counter()
 
         # Extract all variable indices
         all_vars = sorted(set(i for i, _ in Q) | set(j for _, j in Q))
@@ -54,8 +54,10 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
         # Solve
         time_limit_seconds = min(time_limit_seconds, 60)
         solver = PULP_CBC_CMD(msg=False, timeLimit=time_limit_seconds, options=['-stop'])
+        start_time_solver = time.perf_counter()
         status = model.solve(solver)
-        duration = time.perf_counter() - start_time
+        model_duration = time.perf_counter() - start_time_model
+        solver_duration = time.perf_counter() - start_time_solver
 
         if status != LpStatusOptimal:
             logger.warning("CBC did not find an optimal solution.")
@@ -73,7 +75,8 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
             iteration_id=iteration_id,
             assignment=assignment,
             objective_value=objective_value,
-            duration=duration,
+            duration=model_duration,
+            solver_time=solver_duration,
             cluster_id=cluster_id
         )
         session.add(cbc_result)

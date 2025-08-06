@@ -152,7 +152,6 @@ class QAResult(Base):
     qa_result_id = Column(Integer, primary_key=True)
     run_configs_id = Column(Integer, nullable=False)
     iteration_id = Column(Integer, nullable=False)
-    lambda_strategy = Column(String(50))
     lambda_value = Column(Float)
     comp_type = Column(String(50))
     num_reads = Column(Integer)
@@ -163,12 +162,12 @@ class QAResult(Base):
     assignment = Column(JSON)
     energy = Column(Float)
     duration = Column(Float)
+    solver_time = Column(Float)
     qubo_path = Column(String(255))
     qubo_size = Column(Integer)
     qubo_density = Column(Float)
     cluster_id = Column(Integer)
     invalid_assignment_vehicles = Column(String(2000), nullable=True)
-    dwave_constraints_check = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class QuboRunStats(Base):
@@ -250,9 +249,11 @@ class GurobiResult(Base):
     assignment = Column(JSON)  # Store variable assignment as JSON
     objective_value = Column(Float)
     duration = Column(Float)
+    solver_time = Column(Float)
     best_bound = Column(Float)       
     gap = Column(Float)     
     cluster_id = Column(Integer)
+    time_limit_seconds = Column(Integer, nullable=True)  # Time limit in seconds
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class GurobiRoute(Base):
@@ -310,19 +311,20 @@ class ObjectiveValue(Base):
 
 class SaResult(Base):
     __tablename__ = 'sa_results'
-    id = Column(Integer, primary_key=True)
-    run_configs_id = Column(Integer)
-    iteration_id = Column(Integer)
-    num_reads = Column(Integer)
-    n_vehicles = Column(Integer)
-    k_alternatives = Column(Integer)
-    vehicle_ids = Column(JSON)
-    assignment_valid = Column(Boolean)
-    assignment = Column(JSON)
-    energy = Column(Float)
-    duration = Column(Float)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_configs_id = Column(Integer, nullable=False)
+    iteration_id = Column(Integer, nullable=False)
+    num_reads = Column(Integer, nullable=False)
+    n_vehicles = Column(Integer, nullable=False)
+    k_alternatives = Column(Integer, nullable=False)
+    vehicle_ids = Column(JSON, nullable=False)
+    assignment_valid = Column(Boolean, nullable=False)
+    assignment = Column(JSON, nullable=False)
+    energy = Column(Float, nullable=False)
+    duration = Column(Float, nullable=False)
+    solver_time = Column(Float, nullable=False)
     invalid_assignment_vehicles = Column(String(2000), nullable=True)
-    cluster_id = Column(Integer, nullable=True)
+    cluster_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 # Create all tables if they do not exist
 
@@ -352,6 +354,7 @@ class TabuResult(Base):
     assignment = Column(JSON, nullable=False)
     energy = Column(Float, nullable=False)
     duration = Column(Float, nullable=False)
+    solver_time = Column(Float, nullable=False)
     invalid_assignment_vehicles = Column(String(2000), nullable=True)
     cluster_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
