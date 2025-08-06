@@ -83,7 +83,8 @@ def get_or_create_city(session) -> Any:
             nodes, edges = get_city_graph(CITY_NAME, center_coords=CENTER_COORDS, radius_km =RADIUS_KM)
             city = store_city_to_db(
                 session, CITY_NAME, nodes, edges, City, Node, Edge,
-                center_coords=CENTER_COORDS, radius_km=RADIUS_KM
+                center_coords=CENTER_COORDS, radius_km=RADIUS_KM,
+                attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES
             )
     else:
         # Look for existing full city
@@ -137,11 +138,11 @@ def generate_and_store_vehicles(
         logger.info("Using attraction-based vehicle generation.")
         return generate_vehicles_attraction(
             session=session,
-            Vehicle=Vehicle,
             run_config_id=run_configs.run_configs_id,
             iteration_id=iteration_id,
+            Vehicle=Vehicle,
             edges_gdf=edges_gdf,
-            nr_vehicles=N_VEHICLES,
+            n_vehicles=N_VEHICLES,
             min_length=MIN_LENGTH,
             max_length=MAX_LENGTH,
             attraction_point=attraction_point,
@@ -152,24 +153,22 @@ def generate_and_store_vehicles(
         logger.info("Using random vehicle generation.")
         return generate_vehicles(
             session=session,
-            Vehicle=Vehicle,
             run_config_id=run_configs.run_configs_id,
             iteration_id=iteration_id,
+            Vehicle=Vehicle,
             edges_gdf=edges_gdf,
-            nr_vehicles=N_VEHICLES,
+            n_vehicles=N_VEHICLES,
             min_length=MIN_LENGTH,
             max_length=MAX_LENGTH
         )
 
 
-
-def generate_and_store_routes(session, run_configs_id, iteration_id, vehicles_gdf, edges) -> pd.DataFrame:
+def generate_and_store_routes(session, run_configs_id, iteration_id, vehicles_df, edges) -> pd.DataFrame:
     """Generate vehicle routes and store them in the database."""
     logger.info("Generate vehicle routes at: %s", datetime.now())
     vehicle_routes_df = generate_vehicle_routes(
-        session, VehicleRoute, RoutePoint,
-        run_configs_id, iteration_id,
-        vehicles_gdf, edges, K_ALTERNATIVES, TIME_STEP, TIME_WINDOW
+        session, run_configs_id, iteration_id, VehicleRoute, RoutePoint,
+        vehicles_df, edges, K_ALTERNATIVES, TIME_STEP, TIME_WINDOW
     )
     return vehicle_routes_df
 
@@ -179,7 +178,7 @@ def compute_and_store_congestion(session, run_configs_id, iteration_id) -> pd.Da
     logger.info("Compute congestion at: %s", datetime.now())
     congestion_df = generate_congestion(
         session,
-        run_configs_id, iteration_id, TIME_STEP
+        run_configs_id, iteration_id, TIME_STEP, DISTANCE_FACTOR
     )
     return congestion_df  # Do not groupby h
 
@@ -240,6 +239,7 @@ def build_and_save_qubo_matrix(
         run_configs_id=run_configs_id,
         iteration_id=iteration_id,
         filtering_percentage=N_FILTERED/N_VEHICLES,
+        cluster_resolution=CLUSTER_RESOLUTION,
         cluster_id=cluster_id,
         n_vehicles=N_VEHICLES,
         n_filtered_vehicles=N_FILTERED
@@ -437,10 +437,10 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
             affected_edges_df["cluster_id"] = idx
             all_affected_edges.append(affected_edges_df)
 
-        t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
-        Q, t_Q, lambda_penalty = build_and_save_qubo_matrix(vehicle_routes_df, weights_df, duration_penalty_df, session,
-            run_config.run_configs_id, iteration_id, t, idx, filtered_ids)
-        
+        route_alternatives = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
+        Q, route_alternatives_Q, lambda_penalty = build_and_save_qubo_matrix(vehicle_routes_df, weights_df, duration_penalty_df, session,
+            run_config.run_configs_id, iteration_id, route_alternatives, idx, filtered_ids)
+
         n_filtered = len(filtered_ids)
 
         qa_result = qa_testing(
@@ -448,8 +448,8 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
             run_configs_id=run_config.run_configs_id,
             iteration_id=iteration_id,
             session=session,
-            n=len(filtered_ids),
-            t=t,
+            n_vehicles=len(filtered_ids),
+            route_alternatives=route_alternatives,
             vehicle_ids=filtered_ids,
             lambda_value=lambda_penalty,
             comp_type=COMP_TYPE,
@@ -460,7 +460,7 @@ def process_clusters(clusters, session, run_config, iteration_id, vehicle_routes
         qa_assignment += qa_result['assignment']
 
 
-        gurobi_result, _ = gurobi_testing(Q, n_filtered, t_Q, run_config.run_configs_id, iteration_id, session,
+        gurobi_result, _ = gurobi_testing(session, run_config.run_configs_id, iteration_id, Q, n_filtered, route_alternatives_Q,
                                                   comp_type=COMP_TYPE,
                                                   time_limit_seconds=qa_result['solver_time'],
                                                     cluster_id=idx)
@@ -485,14 +485,14 @@ def main():
             if not iteration_id:
                 return
 
-            vehicles = generate_and_store_vehicles(session, run_config, iteration_id, attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES)
-            routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles, edges)
+            vehicles_gdf = generate_and_store_vehicles(session, run_config, iteration_id, attraction_point=ATTRACTION_POINT, d_alternatives=D_ALTERNATIVES)
+            routes_df = generate_and_store_routes(session, run_config.run_configs_id, iteration_id, vehicles_gdf, edges)
             congestion_df = compute_and_store_congestion(session, run_config.run_configs_id, iteration_id)
             weights_df, duration_penalty_df = get_congestion_weights(session, run_config.run_configs_id, iteration_id)
             weights_df.to_csv(CONGESTION_WEIGHTS_FILENAME, index=False)
 
-            all_vehicle_ids = vehicles["vehicle_id"].tolist()
-            clusters = get_clusters_by_connectivity(congestion_df, resolution=1.2, min_cluster_size=MIN_CLUSTER_SIZE) or [
+            all_vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
+            clusters = get_clusters_by_connectivity(congestion_df, resolution=CLUSTER_RESOLUTION, min_cluster_size=MIN_CLUSTER_SIZE) or [
                 (all_vehicle_ids, congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'}), 0.0, len(all_vehicle_ids))
             ]
 
@@ -508,9 +508,9 @@ def main():
             post_qa_df, _ = post_qa_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, qa_assignments, ROUTE_METHOD)
             #post_sa_df, _ = post_sa_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, sa_assignement, ROUTE_METHOD)
             #post_tabu_df, _ = post_tabu_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, tabu_assignement, ROUTE_METHOD)
-            t = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
-            post_gurobi_df, _ = post_gurobi_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, gurobi_assignement, t, ROUTE_METHOD)
-           
+            route_alternatives = get_k_alternatives(session, run_config.run_configs_id, iteration_id)
+            post_gurobi_df, _ = post_gurobi_congestion(session, run_config.run_configs_id, iteration_id, all_vehicle_ids, all_filtered, gurobi_assignement, route_alternatives, ROUTE_METHOD)
+
             post_qa_df = post_qa_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
             #post_sa_df = post_sa_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})
             #post_tabu_df = post_tabu_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'})

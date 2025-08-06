@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def get_clusters_by_connectivity(
     congestion_df: pd.DataFrame,
-    resolution: float = 0.7,
+    resolution: float = 4.0,
     min_cluster_size: int = 100,
 ) -> list:
     """
@@ -38,27 +38,14 @@ def get_clusters_by_connectivity(
     g.add_edges([(node_to_idx[u], node_to_idx[v]) for u, v in edges])
     g.es['weight'] = weights
 
-    # Auto-adjust resolution based on graph density
-    num_nodes = len(nodes)
-    num_edges = len(congestion_df)
-    density = 2 * num_edges / (num_nodes * (num_nodes - 1))
 
-    if density < 0.01:
-        computed_resolution = 0.5
-    elif density < 0.05:
-        computed_resolution = 0.7
-    elif density < 0.1:
-        computed_resolution = 1.0
-    else:
-        computed_resolution = 1.2
 
-    print(f"Graph density: {density:.4f}, suggested resolution: {computed_resolution:.2f}")
     # Leiden clustering
     part = leidenalg.find_partition(
         g,
         leidenalg.RBConfigurationVertexPartition,
         weights='weight',
-        resolution_parameter=4.0
+        resolution_parameter = resolution
     )
 
     initial_clusters = [list(community) for community in part]

@@ -38,8 +38,8 @@ def qa_testing(
     run_configs_id: int,
     iteration_id: int,
     session: Any,
-    n: int,
-    t: int,
+    n_vehicles: int,
+    route_alternatives: int,
     vehicle_ids=None,
     lambda_value=None,
     comp_type: str = 'hybrid',
@@ -56,8 +56,8 @@ def qa_testing(
         run_config_id: Run configuration ID
         iteration_id: Iteration number
         session: SQLAlchemy session
-        n: Number of vehicles
-        t: Number of routes per vehicle
+        n_vehicles: Number of vehicles
+        route_alternatives: Number of routes per vehicle
         weights: Weights for the QUBO
         vehicle_ids: IDs of vehicles
         lambda_value: Lambda value for the QUBO
@@ -71,7 +71,6 @@ def qa_testing(
     """
     # --- Authentication ---
     api_token = get_api_token()
-
 
 
     # --- Run sampler ---
@@ -105,7 +104,7 @@ def qa_testing(
 
 
         # Create and register variable names
-        x_vars = {i: f"x_{i}" for i in range(n * t)}
+        x_vars = {i: f"x_{i}" for i in range(n_vehicles * route_alternatives)}
         for name in x_vars.values():
             qm.add_variable("BINARY", name)
 
@@ -126,8 +125,8 @@ def qa_testing(
 
         print("CQM objective set with", len(Q), "terms")
         # Add one-hot constraints: one route per vehicle
-        for i in range(n):
-            terms = [x_vars[i * t + k] for k in range(t)]
+        for i in range(n_vehicles):
+            terms = [x_vars[i * route_alternatives + k] for k in range(route_alternatives)]
             cqm.add_constraint(sum(Binary(v) for v in terms) == 1, label=f"one_hot_vehicle_{i}")
 
 
@@ -173,7 +172,7 @@ def qa_testing(
     if comp_type == 'hybrid_cqm':
         record = response.first
         best_sample, energy = record[:2]
-        assignment = [int(best_sample[f"x_{i * t + k}"]) for i in range(n) for k in range(t)]
+        assignment = [int(best_sample[f"x_{i * route_alternatives + k}"]) for i in range(n_vehicles) for k in range(route_alternatives)]
         print("Hybrid CQM assignment:", assignment)
     else:
         record = response.first
@@ -184,16 +183,12 @@ def qa_testing(
     # --- Check validity for all modes ---
     invalid_assignment_vehicles = []
     for i, vehicle_id in enumerate(vehicle_ids):
-        assignment_slice = assignment[i * t : (i + 1) * t]
+        assignment_slice = assignment[i * route_alternatives : (i + 1) * route_alternatives]
         if assignment_slice.count(1) != 1:
             invalid_assignment_vehicles.append(vehicle_id)
 
     assignment_valid = len(invalid_assignment_vehicles) == 0
     invalid_assignment_vehicles_str = ",".join(str(v) for v in invalid_assignment_vehicles)
-
-
-
-
 
 
     # --- Save QUBO matrix to file ---
@@ -211,7 +206,7 @@ def qa_testing(
     non_zero_entries = {key: value for key, value in Q.items() if value != 0.0}
     #print(f"Non-zero entries: {non_zero_entries}")
     #print(f"Number of non-zero entries: {len(non_zero_entries)}")
-    total_elements = (n*t)** 2
+    total_elements = (n_vehicles * route_alternatives) ** 2
 
 
     # --- Store results in DB ---
@@ -221,8 +216,8 @@ def qa_testing(
         lambda_value=lambda_value,
         comp_type=comp_type,
         num_reads=num_reads,
-        n_vehicles=n,
-        k_alternatives=t,
+        n_vehicles=n_vehicles,
+        k_alternatives=route_alternatives,
         vehicle_ids=vehicle_ids,
         assignment_valid=int(assignment_valid),
         assignment=assignment,
@@ -230,10 +225,10 @@ def qa_testing(
         duration=model_duration,        
         solver_time=total_annealing_time_s,
         qubo_path=str(filepath),
-        qubo_size=n*t,
+        qubo_size=n_vehicles * route_alternatives,
         qubo_density=len(non_zero_entries) / total_elements,
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
-        cluster_id = cluster_id,
+        cluster_id=cluster_id,
         created_at=datetime.datetime.utcnow()
     )
     session.add(result_record)
@@ -244,8 +239,8 @@ def qa_testing(
     return {
         'comp_type': comp_type,
         'num_reads': num_reads,
-        'n_vehicles': n,
-        'k_alternatives': t,
+        'n_vehicles': n_vehicles,
+        'k_alternatives': route_alternatives,
         'assignment_valid': assignment_valid,
         'assignment': assignment,
         'energy': energy,

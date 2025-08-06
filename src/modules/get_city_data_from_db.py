@@ -37,6 +37,10 @@ def get_city_data_from_db(
         edges_gdf = gpd.GeoDataFrame(edges_df, geometry='geometry', crs='EPSG:4326')
         logger.info(f"Fetched city data for city_id={city_id}: {len(nodes_gdf)} nodes, {len(edges_gdf)} edges.")
         return nodes_gdf, edges_gdf
+    
     except Exception as e:
         logger.error(f"Error fetching city data from DB: {e}", exc_info=True)
         return gpd.GeoDataFrame(), gpd.GeoDataFrame()
+    
+    finally:
+        session.close()

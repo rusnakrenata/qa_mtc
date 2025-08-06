@@ -154,3 +154,7 @@ def post_tabu_congestion(
         session.rollback()
         logger.error(f"Error in post_tabu_congestion: {e}", exc_info=True)
         return pd.DataFrame(), None
+    
+    finally:
+        session.close()
+

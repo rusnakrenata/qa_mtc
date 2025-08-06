@@ -8,21 +8,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
-def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_seconds: int = 300, cluster_id: int = 0):
+def cbc_testing(
+    session,
+    run_configs_id,
+    iteration_id,
+    Q: dict,
+    time_limit_seconds: int = 300,
+    cluster_id: int = 0
+):
     """
-    Solves a QUBO problem using CBC by linearizing it into a MIP.
+    Solves a QUBO problem using CBC by linearizing it into a MIP formulation.
 
     Args:
-        Q: QUBO matrix as a dict {(i, j): value}
+        session: SQLAlchemy session
         run_configs_id: Run config ID
         iteration_id: Iteration ID
-        session: SQLAlchemy session
-        time_limit_seconds: Max time allowed
-        cluster_id: Optional clustering info
+        Q: QUBO matrix as a dict {(i, j): value}
+        time_limit_seconds: Max solver time (in seconds), default is 300s (limited to 60s)
+        cluster_id: Optional clustering info for grouping assignments
 
     Returns:
-        (result_dict)
+        dict: Assignment results as {variable_name: value}
     """
     try:
         start_time_model = time.perf_counter()
@@ -30,35 +36,37 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
         # Extract all variable indices
         all_vars = sorted(set(i for i, _ in Q) | set(j for _, j in Q))
 
-        # Create problem and variables
+        # Create MIP model
         model = LpProblem("QUBO_Linearized", LpMinimize)
         x = {i: LpVariable(f"x_{i}", cat=LpBinary) for i in all_vars}
 
-        # Linearization: create z_ij for i != j
+        # Linearize quadratic terms: introduce z_ij
         z = {}
         for (i, j), value in Q.items():
-            if i != j and (i, j) not in z and (j, i) not in z:
-                z_name = f"z_{i}_{j}"
-                z[i, j] = LpVariable(z_name, cat=LpBinary)
-                # Add constraints for z_ij = x_i * x_j
-                model += z[i, j] <= x[i]
-                model += z[i, j] <= x[j]
-                model += z[i, j] >= x[i] + x[j] - 1
+            if i != j:
+                key = tuple(sorted((i, j)))
+                if key not in z:
+                    z[key] = LpVariable(f"z_{key[0]}_{key[1]}", cat=LpBinary)
+                    # Constraints to linearize x_i * x_j
+                    model += z[key] <= x[i]
+                    model += z[key] <= x[j]
+                    model += z[key] >= x[i] + x[j] - 1
 
-        # Objective: sum of Q[i,i]*x_i + Q[i,j]*z_ij
+        # Objective function: linear + quadratic terms
         linear_terms = [Q[i, i] * x[i] for (i, j) in Q if i == j]
-        quad_terms = [Q[i, j] * z[min(i, j), max(i, j)] for (i, j) in Q if i != j and (min(i, j), max(i, j)) in z]
-
+        quad_terms = [Q[i, j] * z[tuple(sorted((i, j)))] for (i, j) in Q if i != j and tuple(sorted((i, j))) in z]
         model += lpSum(linear_terms + quad_terms)
 
-        # Solve
-        time_limit_seconds = min(time_limit_seconds, 60)
+        # Solve with time limit (max 60s)
+        time_limit_seconds = min(time_limit_seconds, 600)
         solver = PULP_CBC_CMD(msg=False, timeLimit=time_limit_seconds, options=['-stop'])
+
         start_time_solver = time.perf_counter()
         status = model.solve(solver)
         model_duration = time.perf_counter() - start_time_model
         solver_duration = time.perf_counter() - start_time_solver
 
+        # Process results
         if status != LpStatusOptimal:
             logger.warning("CBC did not find an optimal solution.")
             result = {}
@@ -69,7 +77,7 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
 
         assignment = list(result.items())
 
-        # Store in DB
+        # Store in database
         cbc_result = CbcResult(
             run_configs_id=run_configs_id,
             iteration_id=iteration_id,
@@ -81,6 +89,7 @@ def cbc_testing(Q: dict, run_configs_id, iteration_id, session, time_limit_secon
         )
         session.add(cbc_result)
         session.commit()
+        session.close()
 
         return result
 

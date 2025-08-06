@@ -13,7 +13,7 @@ def post_cbc_congestion(
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
     cbc_assignment: List[int],
-    t: int,
+    route_alternatives: int,
     method: str = "duration"
 ):
     """
@@ -26,7 +26,7 @@ def post_cbc_congestion(
         all_vehicle_ids: List of all vehicle IDs
         optimized_vehicle_ids: Vehicles used in CBC optimization
         cbc_assignment: Flat list of binary route choices
-        t: Number of route alternatives per vehicle
+        route_alternatives: Number of route alternatives per vehicle
         method: 'distance' or 'duration' for fallback assignments
 
     Returns:
@@ -36,7 +36,7 @@ def post_cbc_congestion(
         vehicle_route_pairs = []
 
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
-            assignment = cbc_assignment[idx * t : (idx + 1) * t]
+            assignment = cbc_assignment[idx * route_alternatives : (idx + 1) * route_alternatives]
             if assignment.count(1) == 1:
                 route_id = assignment.index(1) + 1
             else:
@@ -131,3 +131,6 @@ def post_cbc_congestion(
         session.rollback()
         logger.error(f"Error in post_cbc_congestion: {e}", exc_info=True)
         return pd.DataFrame(), None
+    
+    finally:
+        session.close()

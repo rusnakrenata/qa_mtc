@@ -28,6 +28,9 @@ class City(Base):
     center_lon = Column(Numeric(9, 6), nullable=True)  # Center longitude for city subset
     radius_km = Column(Float, nullable=True)  # Radius in km for city subset
     is_subset = Column(Boolean, default=False)  # Whether this is a city subset
+    attraction_lat = Column(Numeric(9, 6), nullable=True)  # Attraction point latitude
+    attraction_lon = Column(Numeric(9, 6), nullable=True)  # Attraction point longitude
+    d_alternatives = Column(Integer, nullable=True)  # Number of route alternatives
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Node(Base):
@@ -68,12 +71,13 @@ class RunConfig(Base):
     __tablename__ = 'run_configs'
     run_configs_id = Column(Integer, primary_key=True)
     city_id = Column(Integer,  nullable=False)
-    n_cars = Column(Integer)
+    n_vehicles = Column(Integer)
     k_alternatives = Column(Integer)
     min_length = Column(Integer)
     max_length = Column(Integer)
     time_step = Column(Integer, nullable=False)
     time_window = Column(Integer, nullable=False)
+    distance_factor = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Vehicle(Base):
@@ -177,6 +181,7 @@ class QuboRunStats(Base):
     iteration_id = Column(Integer, nullable=False)
     cluster_id = Column(Integer, nullable=False)
     filtering_percentage = Column(Float, nullable=True)
+    cluster_resolution = Column(Float, nullable=True)  # Resolution of clustering
     n_vehicles = Column(Integer, nullable=False)
     n_filtered_vehicles = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

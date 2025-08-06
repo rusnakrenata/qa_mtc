@@ -91,8 +91,10 @@ def compute_shortest_routes_dur(
             'iteration_id': iteration_id
         })
         congestion_df = pd.DataFrame(congestion_result.fetchall(), columns=["edge_id", "congestion_score"])
+        session.close()
 
         return congestion_df, route_objs
+    
     except Exception as e:
         logger.error(f"Error computing shortest-duration routes: {e}", exc_info=True)
         return pd.DataFrame(columns=["edge_id", "congestion_score"]), []

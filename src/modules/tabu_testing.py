@@ -1,21 +1,21 @@
 import time
 import datetime
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 from dimod import BinaryQuadraticModel
 from dwave.samplers import TabuSampler
-from models import TabuResult  # your new table
+from models import TabuResult
 
 logger = logging.getLogger(__name__)
 
 def tabu_testing(
-    Q: dict,
+    session: Any,
     run_configs_id: int,
     iteration_id: int,
-    session: Any,
-    n: int,
-    t: int,
-    vehicle_ids=None,
+    Q: dict,
+    n_vehicles: int,
+    route_alternatives: int,
+    vehicle_ids: List[int] = None,
     num_reads: int = 1,
     vehicle_routes_df=None,
     cluster_id: int = None
@@ -24,12 +24,12 @@ def tabu_testing(
     Run QUBO using D-Wave's Tabu Search Sampler and store result in TabuResult table.
 
     Args:
-        Q: QUBO matrix as a dictionary {(q1, q2): value}
+        session: SQLAlchemy session
         run_configs_id: Run configuration ID
         iteration_id: Iteration number
-        session: SQLAlchemy session
-        n: Number of vehicles
-        t: Number of routes per vehicle
+        Q: QUBO matrix as a dictionary {(q1, q2): value}
+        n_vehicles: Number of vehicles
+        route_alternatives: Number of routes per vehicle
         vehicle_ids: List of vehicle IDs
         num_reads: Number of Tabu reads (iterations)
         vehicle_routes_df: DataFrame of vehicle routes
@@ -57,7 +57,7 @@ def tabu_testing(
     # Validate assignment
     invalid_assignment_vehicles = []
     for i, vehicle_id in enumerate(vehicle_ids):
-        assignment_slice = assignment[i * t: (i + 1) * t]
+        assignment_slice = assignment[i * route_alternatives: (i + 1) * route_alternatives]
         if assignment_slice.count(1) != 1:
             invalid_assignment_vehicles.append(vehicle_id)
 
@@ -69,8 +69,8 @@ def tabu_testing(
         run_configs_id=run_configs_id,
         iteration_id=iteration_id,
         num_reads=num_reads,
-        n_vehicles=n,
-        k_alternatives=t,
+        n_vehicles=n_vehicles,
+        k_alternatives=route_alternatives,
         vehicle_ids=vehicle_ids,
         assignment_valid=assignment_valid,
         assignment=assignment,
@@ -83,14 +83,15 @@ def tabu_testing(
     )
     session.add(result_record)
     session.commit()
+    session.close()
 
     logger.info(f"Tabu Search result stored: assignment_valid={assignment_valid}, energy={energy}, duration={model_duration:.2f}s, solver_time={solver_duration:.2f}s")
 
     return {
         'comp_type': 'tabu',
         'num_reads': num_reads,
-        'n_vehicles': n,
-        'k_alternatives': t,
+        'n_vehicles': n_vehicles,
+        'k_alternatives': route_alternatives,
         'assignment_valid': assignment_valid,
         'assignment': assignment,
         'energy': energy,

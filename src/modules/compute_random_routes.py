@@ -71,6 +71,8 @@ def compute_random_routes(
     """), {"run_configs_id": run_configs_id, "iteration_id": iteration_id})
 
     rows = list(result.fetchall())
+    session.close()
     logger.info(f"Computed congestion for {len(rows)} edges using random routes.")
 
     return pd.DataFrame(rows, columns=["edge_id", "congestion_score"]), random_route_objs # type: ignore
+

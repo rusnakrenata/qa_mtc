@@ -13,7 +13,7 @@ def post_gurobi_congestion(
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
     gurobi_assignment: List[Any],
-    t: int,
+    route_alternatives: int,
     method: str = "duration"
 ) :
     """
@@ -25,7 +25,7 @@ def post_gurobi_congestion(
         all_vehicle_ids: List of all vehicle IDs in the simulation
         optimized_vehicle_ids: List of vehicle IDs used in QUBO/Gurobi
         gurobi_assignment: List of (var_name, value) tuples or dict {var_name: value}
-        t: Number of route alternatives per vehicle
+        route_alternatives: Number of route alternatives per vehicle
         method: 'distance' or 'duration' for non-optimized vehicles
     Returns:
         DataFrame with columns ['edge_id', 'congestion_score']
@@ -33,14 +33,12 @@ def post_gurobi_congestion(
     try:
         vehicle_route_pairs = []
 
-
-
         # For optimized vehicles, use Gurobi assignment
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
             # Each vehicle has t variables: x_{q}, where q = idx * t + k
             assigned_route = None
-            for k in range(t):
-                if gurobi_assignment[idx * t + k] == 1:
+            for k in range(route_alternatives):
+                if gurobi_assignment[idx * route_alternatives + k] == 1:
                     assigned_route = k + 1
                     break
 
@@ -157,7 +155,11 @@ def post_gurobi_congestion(
 
         logger.info(f"Recomputed Gurobi congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
         return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), gurobi_routes
+    
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_gurobi_congestion: {e}", exc_info=True)
         return pd.DataFrame(), None
+    
+    finally:
+        session.close()

@@ -7,20 +7,23 @@
 CITY_NAME = "Košice, Slovakia"
 CENTER_COORDS = (48.7164, 21.2611)
 RADIUS_KM = 1.0
-N_VEHICLES = 800
+N_VEHICLES = 2000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
 MAX_LENGTH = 6000
 TIME_STEP = 10
 TIME_WINDOW = 300
+DISTANCE_FACTOR = 4.0  # Factor to adjust distance in congestion calculations
+CLUSTER_RESOLUTION = 4.0  # Resolution for clustering in connectivity analysis
+
+ATTRACTION_POINT = None#(51.4816, -3.1791)
+D_ALTERNATIVES = None#3
 
 # --- QUBO/QA Parameters ---
-COMP_TYPE = "hybrid_cqm"             # 'sa', 'hybrid', or 'qpu'
+COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
 MIN_CLUSTER_SIZE = 300
 MAX_CLUSTERS = 1
 
-# Vehicle origin and destination
-ATTRACTION_POINT = None#(51.4816, -3.1791)
-D_ALTERNATIVES = None#3
+
 

@@ -41,7 +41,11 @@ def create_iteration(
             session.commit()
             logger.info(f"Iteration created (iteration_id={new_iteration_id}) for run_config_id={run_config_id}.")
             return new_iteration_id
+        
     except Exception as e:
         logger.error(f"Error creating iteration: {e}", exc_info=True)
         session.rollback()
         return None
+    
+    finally:
+        session.close()
