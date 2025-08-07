@@ -42,7 +42,7 @@ def gurobi_testing(
             - objective_value: Optimal objective value.
     """
     # Ensure time limit between 1 and 10 minutes
-    time_limit_seconds = min(max(time_limit_seconds, 60), 600)
+    time_limit_seconds = min(time_limit_seconds, 600)
 
     start_time_model = time.perf_counter()
 

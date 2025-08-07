@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 def get_or_create_run_config(
     session: Any,
     city_id: int,
-    RunConfig: Any,
+    config_class: Any,
     n_vehicles: int,
     route_alternatives: int,
     min_length: int,
@@ -21,7 +21,7 @@ def get_or_create_run_config(
     Args:
         session: SQLAlchemy session.
         city_id: City ID.
-        RunConfig: SQLAlchemy RunConfig model.
+        config_class: SQLAlchemy RunConfig model.
         n_vehicles: Number of vehicles.
         route_alternatives: Number of route alternatives.
         min_length: Minimum route length.
@@ -34,9 +34,9 @@ def get_or_create_run_config(
         The existing or newly created RunConfig object.
     """
     try:
-        existing_run = session.query(RunConfig).filter_by(
+        existing_run = session.query(config_class).filter_by(
             city_id=city_id,
-            n_cars=n_vehicles,
+            n_vehicles=n_vehicles,
             k_alternatives=route_alternatives,
             min_length=min_length,
             max_length=max_length,
@@ -49,9 +49,9 @@ def get_or_create_run_config(
             logger.info(f"Run config already exists (run_id={existing_run.run_configs_id}), skipping insertion.")
             return existing_run
         else:
-            run_config = RunConfig(
+            run_config = config_class(
                 city_id=city_id,
-                n_cars=n_vehicles,
+                n_vehicles=n_vehicles,
                 k_alternatives=route_alternatives,
                 min_length=min_length,
                 max_length=max_length,

@@ -33,11 +33,11 @@ def authenticate_with_token(token: str) -> bool:
 
 
 
-def qa_testing(
-    Q: dict,
+def qa_testing(    
+    session: Any,
     run_configs_id: int,
     iteration_id: int,
-    session: Any,
+    Q: dict,
     n_vehicles: int,
     route_alternatives: int,
     vehicle_ids=None,
