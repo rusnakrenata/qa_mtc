@@ -9,6 +9,7 @@ SELECT
     sa.energy as sa_energy,
     tr.energy as tabu_energy,
     cbc.objective_value as cbc_energy,
+    cbc.status as cbc_status,
     gr.objective_value as gurobi_energy
 FROM trafficOptimization.qa_results qr
 INNER JOIN trafficOptimization.gurobi_results gr
@@ -23,6 +24,10 @@ INNER JOIN trafficOptimization.tabu_results tr
     ON tr.run_configs_id = qr.run_configs_id
    AND tr.iteration_id = qr.iteration_id
    AND tr.cluster_id = qr.cluster_id
+INNER JOIN trafficOptimization.cbc_results cbc
+    ON cbc.run_configs_id = qr.run_configs_id
+   AND cbc.iteration_id = qr.iteration_id
+   AND cbc.cluster_id = qr.cluster_id
 WHERE gr.run_configs_id = %s 
   AND gr.iteration_id = %s;
 WITH vars AS (

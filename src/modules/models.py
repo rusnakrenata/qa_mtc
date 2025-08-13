@@ -149,6 +149,11 @@ class CongestionMap(Base):
     vehicle2_route = Column(Integer, nullable=False)
     congestion_score = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        Index('idx_cm_cfg_iter_v1', 'run_configs_id', 'iteration_id', 'vehicle1', 'vehicle1_route'),
+        Index('idx_cm_cfg_iter_v2', 'run_configs_id', 'iteration_id', 'vehicle2', 'vehicle2_route'),
+        Index('idx_cm_cfg_iter_edge', 'run_configs_id', 'iteration_id', 'edge_id'),
+    )
 
 class QAResult(Base):
     """QAResult table: stores results of QUBO/QA optimization runs."""
@@ -184,6 +189,7 @@ class QuboRunStats(Base):
     cluster_resolution = Column(Float, nullable=True)  # Resolution of clustering
     n_vehicles = Column(Integer, nullable=False)
     n_filtered_vehicles = Column(Integer, nullable=False)
+    max_weight = Column(Float, nullable=True)  # Maximum weight of the QUBO matrix
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class CongestionSummary(Base):
@@ -370,6 +376,8 @@ class CbcResult(Base):
     assignment = Column(JSON, nullable=False)
     objective_value = Column(Float)
     duration = Column(Float)
+    solver_time = Column(Float)
+    status = Column(String(50), nullable=True)  # Status of the CBC solver
     cluster_id = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 

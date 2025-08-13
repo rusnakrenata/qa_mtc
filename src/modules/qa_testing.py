@@ -71,7 +71,7 @@ def qa_testing(
     """
     # --- Authentication ---
     api_token = get_api_token()
-
+    n_filtered_vehicles = len(vehicle_ids) if vehicle_ids else n_vehicles
 
     # --- Run sampler ---
     start_time = time.perf_counter()
@@ -104,7 +104,7 @@ def qa_testing(
 
 
         # Create and register variable names
-        x_vars = {i: f"x_{i}" for i in range(n_vehicles * route_alternatives)}
+        x_vars = {i: f"x_{i}" for i in range(n_filtered_vehicles * route_alternatives)}
         for name in x_vars.values():
             qm.add_variable("BINARY", name)
 
@@ -125,7 +125,7 @@ def qa_testing(
 
         print("CQM objective set with", len(Q), "terms")
         # Add one-hot constraints: one route per vehicle
-        for i in range(n_vehicles):
+        for i in range(n_filtered_vehicles):
             terms = [x_vars[i * route_alternatives + k] for k in range(route_alternatives)]
             cqm.add_constraint(sum(Binary(v) for v in terms) == 1, label=f"one_hot_vehicle_{i}")
 
@@ -172,7 +172,7 @@ def qa_testing(
     if comp_type == 'hybrid_cqm':
         record = response.first
         best_sample, energy = record[:2]
-        assignment = [int(best_sample[f"x_{i * route_alternatives + k}"]) for i in range(n_vehicles) for k in range(route_alternatives)]
+        assignment = [int(best_sample[f"x_{i * route_alternatives + k}"]) for i in range(n_filtered_vehicles) for k in range(route_alternatives)]
         print("Hybrid CQM assignment:", assignment)
     else:
         record = response.first
@@ -206,7 +206,7 @@ def qa_testing(
     non_zero_entries = {key: value for key, value in Q.items() if value != 0.0}
     #print(f"Non-zero entries: {non_zero_entries}")
     #print(f"Number of non-zero entries: {len(non_zero_entries)}")
-    total_elements = (n_vehicles * route_alternatives) ** 2
+    total_elements = (n_filtered_vehicles * route_alternatives) ** 2
 
 
     # --- Store results in DB ---
@@ -225,7 +225,7 @@ def qa_testing(
         duration=model_duration,        
         solver_time=total_annealing_time_s,
         qubo_path=str(filepath),
-        qubo_size=n_vehicles * route_alternatives,
+        qubo_size=n_filtered_vehicles * route_alternatives,
         qubo_density=len(non_zero_entries) / total_elements,
         invalid_assignment_vehicles=invalid_assignment_vehicles_str,
         cluster_id=cluster_id,

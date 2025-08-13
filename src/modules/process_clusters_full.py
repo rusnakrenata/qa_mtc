@@ -2,12 +2,15 @@ from typing import Any, List, Tuple
 import logging
 from qa_testing import qa_testing
 from gurobi_testing import gurobi_testing
+from sa_testing import sa_testing
+from tabu_testing import tabu_testing
+from cbc_testing import cbc_testing
 from qubo_matrix import qubo_matrix
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-def process_clusters(    
+def process_clusters_full(    
     session: Any,
     run_config: Any,
     iteration_id: int,
@@ -20,7 +23,7 @@ def process_clusters(
     cluster_resolution: int,
     comp_type: str = "hybrid",
     qubo_output_dir: Path = Path("output/qubo_matrices")
-) -> Tuple[List[int], List[int], List[List[int]], List[Any]]:
+) :
     """
     Process each vehicle cluster: build Q_matrixUBO, run Q_matrixA and Gurobi, collect results.
 
@@ -42,6 +45,7 @@ def process_clusters(
     """
     qa_assignments = []
     gurobi_assignments = []
+    [sa_assignments, tabu_assignments, cbc_assignments] = [], [], []
     all_vehicle_ids = []
     all_affected_edges = []
 
@@ -106,7 +110,49 @@ def process_clusters(
         sorted_gurobi = [v for k, v in sorted(gurobi_result.items(), key=lambda i: int(i[0].split("_")[1]))]
         gurobi_assignments.extend(sorted_gurobi)
 
+        # SA
+        sa_result = sa_testing(
+            session=session,
+            run_configs_id=run_config.run_configs_id,   
+            iteration_id=iteration_id,
+            Q=Q_matrix,
+            n_vehicles=n_vehicles,
+            route_alternatives=Q_route_alt,
+            vehicle_ids=vehicle_ids,    
+            vehicle_routes_df=vehicle_routes_df,
+            num_reads=1,
+            cluster_id=cluster_idx
+        )
+        sa_assignments += sa_result['assignment']
+
+        tabu_result = tabu_testing(
+            session=session,
+            run_configs_id=run_config.run_configs_id,   
+            iteration_id=iteration_id,
+            Q=Q_matrix,
+            n_vehicles=n_vehicles,
+            route_alternatives=Q_route_alt,
+            vehicle_ids=vehicle_ids,    
+            vehicle_routes_df=vehicle_routes_df,
+            num_reads=1,
+            cluster_id=cluster_idx
+        )
+        tabu_assignments += tabu_result['assignment']
+
+        cbc_result, _ = cbc_testing(
+            session=session,
+            run_configs_id=run_config.run_configs_id,
+            iteration_id=iteration_id,
+            Q=Q_matrix,
+            time_limit_seconds=qa_result['solver_time'],
+            cluster_id=cluster_idx
+        )
+
+        sorted_cbc = [v for k, v in sorted(cbc_result.items(), key=lambda i: int(i[0].split('_')[1]))]
+        cbc_assignments = []
+        cbc_assignments.extend(sorted_cbc)
+
         # Save processed vehicle IDs
         all_vehicle_ids.append(vehicle_ids)
 
-    return qa_assignments, gurobi_assignments, all_vehicle_ids, all_affected_edges
+    return qa_assignments, gurobi_assignments, sa_assignments, tabu_assignments, cbc_assignments, all_vehicle_ids, all_affected_edges

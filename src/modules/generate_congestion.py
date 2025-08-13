@@ -152,7 +152,7 @@ def generate_congestion(
         grouped['created_at'] = datetime.now()
 
         logger.info("Inserting congestion results into DB at: %s", datetime.now())
-        grouped.to_sql('congestion_map', session.bind, if_exists='append', index=False, method='multi', chunksize=5000)
+        grouped.to_sql('congestion_map', session.bind, if_exists='append', index=False, method='multi', chunksize=10000)
         session.commit()
 
         logger.info("Congestion calculation completed successfully in %s", datetime.now() - start)

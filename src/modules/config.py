@@ -6,8 +6,8 @@
 #RADIUS_KM = None
 CITY_NAME = "Košice, Slovakia"
 CENTER_COORDS = (48.7164, 21.2611)
-RADIUS_KM = 1.0
-N_VEHICLES = 200
+RADIUS_KM = 0.5
+N_VEHICLES = 8000
 K_ALTERNATIVES = 3
 MIN_LENGTH = 500
 MAX_LENGTH = 6000
@@ -24,6 +24,7 @@ COMP_TYPE = "hybrid"             # 'sa', 'hybrid', or 'qpu'
 ROUTE_METHOD = "duration"       # or "distance"
 MIN_CLUSTER_SIZE = 300
 MAX_CLUSTERS = 1
+FULL = False
 
 
 

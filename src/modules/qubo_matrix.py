@@ -138,7 +138,8 @@ def qubo_matrix(
         cluster_resolution=cluster_resolution,
         cluster_id=cluster_id,
         n_vehicles=n_vehicles,
-        n_filtered_vehicles=n_filtered
+        n_filtered_vehicles=n_filtered,
+        max_weight = max_w
     )
     session.add(stats)
     session.commit()

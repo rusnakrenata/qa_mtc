@@ -1,7 +1,7 @@
 import time
 from pulp import (
     LpProblem, LpMinimize, LpVariable, lpSum, PULP_CBC_CMD,
-    LpBinary, LpStatusOptimal
+    LpBinary, LpStatusOptimal, LpStatus
 )
 from models import CbcResult
 import logging
@@ -59,21 +59,23 @@ def cbc_testing(
 
         # Solve with time limit (max 60s)
         time_limit_seconds = min(time_limit_seconds, 600)
-        solver = PULP_CBC_CMD(msg=False, timeLimit=time_limit_seconds, options=['-stop'])
+        solver = PULP_CBC_CMD(msg=False, timeLimit=time_limit_seconds)
 
         start_time_solver = time.perf_counter()
         status = model.solve(solver)
         model_duration = time.perf_counter() - start_time_model
         solver_duration = time.perf_counter() - start_time_solver
 
-        # Process results
-        if status != LpStatusOptimal:
-            logger.warning("CBC did not find an optimal solution.")
-            result = {}
-            objective_value = None
-        else:
-            result = {v.name: int(v.varValue) for v in model.variables() if v.name.startswith("x_")}
+        result = {}
+        for v in model.variables():
+            if v.name.startswith("x_"):
+                val = v.varValue
+                result[v.name] = int(round(val)) if val is not None else 0
+
+        try:
             objective_value = model.objective.value()
+        except Exception:
+            objective_value = None
 
         assignment = list(result.items())
 
@@ -85,13 +87,14 @@ def cbc_testing(
             objective_value=objective_value,
             duration=model_duration,
             solver_time=solver_duration,
+            status=LpStatus[status],
             cluster_id=cluster_id
         )
         session.add(cbc_result)
         session.commit()
         session.close()
 
-        return result
+        return result, objective_value
 
     except Exception as e:
         logger.error(f"Error in CBC linearized QUBO: {e}", exc_info=True)

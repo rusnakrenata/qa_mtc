@@ -10,49 +10,55 @@ def get_or_create_city(
     center_coords: tuple | None = None,
     radius_km: float | None = None,
     attraction_point: tuple | None = None,
-    d_alternatives: int | None = None
+    d_alternatives: int | None = None,
 ) -> Any:
     """
     Get or create a city (full or subset) in the database.
+    Returns: (City, edges_df)
     """
 
-    # Prepare filter with string keys
-    filters = {
-        "name": city_name,
-        "is_subset": center_coords is not None or attraction_point is not None or radius_km is not None or d_alternatives is not None
-    }
+    # Build filters only for provided values
+    is_subset = any(v is not None for v in (center_coords, attraction_point, radius_km, d_alternatives))
+    filters = {"name": city_name, "is_subset": is_subset}
 
-    if center_coords:
+    if center_coords is not None:
         filters["center_lat"] = center_coords[0]
         filters["center_lon"] = center_coords[1]
     if radius_km is not None:
         filters["radius_km"] = radius_km
-    if attraction_point:
+    if attraction_point is not None:
         filters["attraction_lat"] = attraction_point[0]
         filters["attraction_lon"] = attraction_point[1]
     if d_alternatives is not None:
         filters["d_alternatives"] = d_alternatives
 
-    # Use getattr to dynamically apply all filters
-    filter_conditions = [getattr(City, key) == value for key, value in filters.items()]
-    city = session.query(City).filter(*filter_conditions).first()
-    nodes, edges = get_city_data_from_db(session, city.city_id)
+    # Query for existing city
+    city = session.query(City).filter_by(**filters).first()
 
-    if not city:
-        nodes, edges = get_city_graph(city_name, center_coords=center_coords, radius_km=radius_km)
+    # If not found, build and store
+    if city is None:
+        nodes, edges_df = get_city_graph(city_name, center_coords=center_coords, radius_km=radius_km)
         city = store_city_to_db(
             session=session,
             city_name=city_name,
             nodes=nodes,
-            edges=edges,
+            edges=edges_df,
             City=City,
             Node=Node,
             Edge=Edge,
             center_coords=center_coords,
             radius_km=radius_km,
             attraction_point=attraction_point,
-            d_alternatives=d_alternatives
+            d_alternatives=d_alternatives,
         )
 
-    session.close()
-    return city, edges
+    # Now it's safe to load from DB using city.city_id
+    else:
+        city = session.query(City).filter_by(city_id=city.city_id).first()
+        nodes_df, edges_df = get_city_data_from_db(session, city.city_id)
+      # Close the session to avoid leaks
+
+    city_id = city.city_id
+
+    # Don't close the session here; let the caller manage it.
+    return city_id, edges_df
