@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 def generate_vehicles_attraction(
     session: Any,
-    Vehicle: Any,
     run_config_id: int,
     iteration_id: int,
+    Vehicle: Any,
     edges_gdf: gpd.GeoDataFrame,
-    nr_vehicles: int,
+    n_vehicles: int,
     min_length: float,
     max_length: float,
     attraction_point: Tuple[float, float],  # (lat, lon)
@@ -32,7 +32,7 @@ def generate_vehicles_attraction(
         run_config_id: Run configuration ID
         iteration_id: Iteration ID
         edges_gdf: GeoDataFrame of edges
-        nr_vehicles: Number of vehicles to generate
+        n_vehicles: Number of vehicles to generate
         min_length: Minimum allowed trip length (meters)
         max_length: Maximum allowed trip length (meters)
         attraction_point: Optional (lat, lon) of point of attraction
@@ -68,7 +68,7 @@ def generate_vehicles_attraction(
     vehicle_records = []
     vehicle_id = 0
 
-    for _ in range(nr_vehicles):
+    for _ in range(n_vehicles):
         valid_vehicle = False
         retries = 0
         max_retries = 100
@@ -130,6 +130,8 @@ def generate_vehicles_attraction(
     except Exception as e:
         logger.error(f"Error saving vehicles to DB: {e}", exc_info=True)
         session.rollback()
+    finally:
+        session.close()
 
     # 7. Return as GeoDataFrame
     vehicles_df = pd.DataFrame(vehicles)

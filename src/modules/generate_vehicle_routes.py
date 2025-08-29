@@ -132,13 +132,13 @@ def process_vehicle_route(vehicle_data):
 
 def generate_vehicle_routes(
     session: Any,
-    VehicleRoute: Any,
-    RoutePoint: Any,
     run_config_id: int,
     iteration_id: int,
-    vehicles: pd.DataFrame,
+    route_class: Any,
+    route_point_class: Any,
+    vehicles_gdf: gpd.GeoDataFrame,
     edges_gdf: gpd.GeoDataFrame,
-    max_nr_of_alternative_routes: int,
+    k_alternatives: int,
     time_step: int,
     time_window: int
 ) -> pd.DataFrame:
@@ -147,11 +147,11 @@ def generate_vehicle_routes(
 
     Args:
         session: SQLAlchemy session
-        VehicleRoute: SQLAlchemy VehicleRoute model
-        RoutePoint: SQLAlchemy RoutePoint model
+        route_class: SQLAlchemy route_class model
+        route_point_class: SQLAlchemy route_point_class model
         run_config_id: Run configuration ID
         iteration_id: Iteration ID
-        vehicles: DataFrame of vehicles
+        vehicles_df: DataFrame of vehicles_df
         edges_gdf: GeoDataFrame of edges
         max_nr_of_alternative_routes: Number of alternative routes per vehicle
         time_step: Time step for route points
@@ -159,26 +159,26 @@ def generate_vehicle_routes(
     """
     try:
         nest_asyncio.apply()
-        async def batched_valhalla_fetch(vehicles, max_concurrent=20):
+        async def batched_valhalla_fetch(vehicles_gdf, max_concurrent=20):
             semaphore = asyncio.Semaphore(max_concurrent)
             async with aiohttp.ClientSession() as http_session:
                 async def fetch(vehicle):
                     async with semaphore:
                         origin = (vehicle['origin_geometry'].x, vehicle['origin_geometry'].y)
                         dest = (vehicle['destination_geometry'].x, vehicle['destination_geometry'].y)
-                        return await async_get_routes_from_valhalla(http_session, origin, dest, max_nr_of_alternative_routes)
-                tasks = [fetch(vehicle) for _, vehicle in vehicles.iterrows()]
+                        return await async_get_routes_from_valhalla(http_session, origin, dest, k_alternatives)
+                tasks = [fetch(vehicle) for _, vehicle in vehicles_gdf.iterrows()]
                 return await asyncio.gather(*tasks)
         loop = asyncio.get_event_loop()
         logger.info("Fetching routes from Valhalla...")
         t0 = time.time()
-        routes_data_list = loop.run_until_complete(batched_valhalla_fetch(vehicles))
+        routes_data_list = loop.run_until_complete(batched_valhalla_fetch(vehicles_gdf))
         logger.info(f"Valhalla fetch completed in {time.time() - t0:.2f} seconds")
         edges_proj = edges_gdf.to_crs(epsg=3857)
         edges_proj_dict = {'edges': edges_proj, 'crs': edges_proj.crs}
         vehicle_data_list = [
             (vehicle, idx, routes_data_list[i], edges_proj_dict, time_step, time_window)
-            for i, (idx, vehicle) in enumerate(vehicles.iterrows())
+            for i, (idx, vehicle) in enumerate(vehicles_gdf.iterrows())
             if routes_data_list[i]
         ]
         logger.info("Processing vehicle routes...")
@@ -194,7 +194,7 @@ def generate_vehicle_routes(
         logger.info("Writing to database...")
         t2 = time.time()
         vehicle_objs = [
-            VehicleRoute(
+            route_class(
                 vehicle_id=rec['vehicle_id'],
                 run_configs_id=run_config_id,
                 iteration_id=iteration_id,
@@ -205,7 +205,7 @@ def generate_vehicle_routes(
             ) for rec in all_vehicle_routes
         ]
         route_objs = [
-            RoutePoint(
+            route_point_class(
                 vehicle_id=rec['vehicle_id'],
                 run_configs_id=run_config_id,
                 iteration_id=iteration_id,
@@ -226,7 +226,11 @@ def generate_vehicle_routes(
         vehicle_routes_df = pd.DataFrame(all_vehicle_routes)
         #print("vehicle_routes_df: ", vehicle_routes_df)
         return vehicle_routes_df
+    
     except Exception as e:
         logger.error(f"Error in generate_vehicle_routes: {e}", exc_info=True)
         session.rollback()
         return pd.DataFrame()
+    
+    finally:
+        session.close()

@@ -12,8 +12,8 @@ def post_gurobi_congestion(
     iteration_id: int,
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
-    gurobi_assignment: Union[List[tuple], dict],
-    t: int,
+    gurobi_assignment: List[Any],
+    route_alternatives: int,
     method: str = "duration"
 ) :
     """
@@ -25,7 +25,7 @@ def post_gurobi_congestion(
         all_vehicle_ids: List of all vehicle IDs in the simulation
         optimized_vehicle_ids: List of vehicle IDs used in QUBO/Gurobi
         gurobi_assignment: List of (var_name, value) tuples or dict {var_name: value}
-        t: Number of route alternatives per vehicle
+        route_alternatives: Number of route alternatives per vehicle
         method: 'distance' or 'duration' for non-optimized vehicles
     Returns:
         DataFrame with columns ['edge_id', 'congestion_score']
@@ -33,21 +33,15 @@ def post_gurobi_congestion(
     try:
         vehicle_route_pairs = []
 
-        # Convert assignment to dict if needed
-        if isinstance(gurobi_assignment, list):
-            assignment_dict = dict(gurobi_assignment)
-        else:
-            assignment_dict = gurobi_assignment
-
         # For optimized vehicles, use Gurobi assignment
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
             # Each vehicle has t variables: x_{q}, where q = idx * t + k
             assigned_route = None
-            for k in range(t):
-                var_name = f"x_{idx * t + k}"
-                if assignment_dict.get(var_name, 0) == 1:
-                    assigned_route = k + 1  # 1-based route_id
+            for k in range(route_alternatives):
+                if gurobi_assignment[idx * route_alternatives + k] == 1:
+                    assigned_route = k + 1
                     break
+
             if assigned_route is None:
                 # fallback: assign shortest route
                 sql = sa_text(f'''
@@ -63,10 +57,10 @@ def post_gurobi_congestion(
                 row = result.fetchone()
                 if row is not None:
                     assigned_route = row.route_id
-                    logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned shortest route {assigned_route}.")
+                    #logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned shortest route {assigned_route}.")
                 else:
                     assigned_route = 1  # fallback if no route found
-                    logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned first route {assigned_route}.")
+                    #logger.warning(f"Invalid Gurobi assignment for vehicle {vehicle_id}: not one-hot. Assigned first route {assigned_route}.")
             vehicle_route_pairs.append((vehicle_id, assigned_route))
         logger.info(f"Number of optimized vehicles: {len(optimized_vehicle_ids)}")
 
@@ -161,7 +155,11 @@ def post_gurobi_congestion(
 
         logger.info(f"Recomputed Gurobi congestion for run_configs_id={run_configs_id}, iteration_id={iteration_id}.")
         return pd.DataFrame(rows, columns=pd.Index(['edge_id', 'congestion_score'])), gurobi_routes
+    
     except Exception as e:
         session.rollback()
         logger.error(f"Error in post_gurobi_congestion: {e}", exc_info=True)
         return pd.DataFrame(), None
+    
+    finally:
+        session.close()

@@ -10,86 +10,98 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 def haversine_np(lat1, lon1, lat2, lon2):
-    R = 6371000  # meters
+    """Calculate distance in meters between two coordinates using the haversine formula."""
+    R = 6371000  # Earth radius in meters
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+    a = np.sin(dlat / 2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0)**2
     return 2 * R * np.arcsin(np.sqrt(a))
 
-def process_group(group_df, dist_thresh, speed_diff_thresh):
+def process_group(group_df: pd.DataFrame, time_step: int, distance_factor: float) -> pd.DataFrame:
+    """
+    Process a group of vehicle-route points to calculate congestion scores.
+
+    Args:
+        group_df: DataFrame containing grouped route points.
+        time_step: Time interval in seconds.
+        distance_factor: Factor influencing congestion distance sensitivity.
+
+    Returns:
+        DataFrame with congestion scores.
+    """
     if len(group_df) < 2:
         return pd.DataFrame()
 
-    merged = group_df.merge(group_df, on=['edge_id', 'time', 'cardinal'], suffixes=('_a', '_b'))
-    merged = merged[merged['vehicle_id_a'] < merged['vehicle_id_b']]
-    if merged.empty:
+    vehicle_ids = group_df['vehicle_id'].values
+    route_ids = group_df['route_id'].values
+    lats = group_df['lat'].values
+    lons = group_df['lon'].values
+    speeds = group_df['speed'].values
+    edge_id = group_df['edge_id'].iloc[0]
+
+    cardinal = group_df['cardinal'].iloc[0].upper()
+    cardinal_map = {
+        'N': np.array([0, 1]), 'S': np.array([0, -1]), 'E': np.array([1, 0]), 'W': np.array([-1, 0]),
+        'NE': np.array([1, 1]), 'NW': np.array([-1, 1]), 'SE': np.array([1, -1]), 'SW': np.array([-1, -1])
+    }
+
+    if cardinal not in cardinal_map:
         return pd.DataFrame()
 
-    merged['distance'] = haversine_np(
-        merged['lat_a'].values, merged['lon_a'].values,
-        merged['lat_b'].values, merged['lon_b'].values
-    )
-    merged['avg_speed'] = (merged['speed_a'] + merged['speed_b'])/2.0
+    edge_unit_vec = cardinal_map[cardinal] / np.linalg.norm(cardinal_map[cardinal])
 
-    '''
-    merged['congestion_score'] =   np.maximum(
-    (merged['avg_speed'] - merged['distance'] / 2.0) / merged['avg_speed'],
-    0
-    )*dist_thresh #replace za time window
-    '''
-    # Define a set of scaling factors for distance sensitivity
-    distance_factors = [0.5, 1.0, 1.5, 2.0]
-    scores = []
+    positions = np.stack([lons, lats], axis=1)
+    projections = positions @ edge_unit_vec
 
-    # Compute congestion score for each scaling factor
-    for factor in distance_factors:
-        score = np.maximum(
-            (merged['avg_speed'] - merged['distance'] / factor) / merged['avg_speed'],
-            0
-        )
-        scores.append(score)
+    results = []
+    for i in range(len(group_df)):
+        for j in range(len(group_df)):
+            if i == j or projections[i] <= projections[j]:
+                continue
 
-    # Stack and take element-wise maximum across all factor-based scores
-    merged['congestion_score'] = np.vstack(scores).max(axis=0) * dist_thresh
+            distance = haversine_np(lats[i], lons[i], lats[j], lons[j])
+            avg_speed = (speeds[i] + speeds[j]) / 2.0
 
+            score = np.maximum((avg_speed - distance / distance_factor) / avg_speed, 0)
+            max_score = score * time_step
 
+            if max_score > 0:
+                results.append({
+                    'edge_id': edge_id,
+                    'vehicle_id_a': vehicle_ids[i],
+                    'route_id_a': route_ids[i],
+                    'vehicle_id_b': vehicle_ids[j],
+                    'route_id_b': route_ids[j],
+                    'congestion_score': max_score
+                })
 
-    filtered = merged[merged['congestion_score'] > 0]
-    if filtered.empty:
-        return pd.DataFrame()
-
-    return filtered[[
-        'edge_id',
-        'vehicle_id_a', 'route_id_a',
-        'vehicle_id_b', 'route_id_b',
-        'congestion_score'
-    ]]
+    return pd.DataFrame(results)
 
 def generate_congestion(
     session: Any,
     run_config_id: int,
     iteration_id: int,
-    dist_thresh: float,
-    speed_diff_thresh: float
+    time_step: int = 10,
+    distance_factor: float = 4.0
 ) -> pd.DataFrame:
     """
-    Compute and store pairwise congestion scores for all vehicle-route pairs in the database.
-    Uses parallel processing for efficiency.
+    Compute pairwise congestion scores and insert results into the database.
 
     Args:
-        session: SQLAlchemy session
-        run_config_id: Run configuration ID
-        iteration_id: Iteration number
-        dist_thresh: Distance threshold (meters)
-        speed_diff_thresh: Speed difference threshold (km/h)
+        session: SQLAlchemy database session.
+        run_config_id: ID for the current run configuration.
+        iteration_id: ID of the current iteration.
+        time_step: Time interval for congestion calculation (seconds).
+        distance_factor: Factor for distance sensitivity in congestion.
 
     Returns:
-        DataFrame with columns [edge_id, vehicle1, vehicle1_route, vehicle2, vehicle2_route, congestion_score]
+        DataFrame containing congestion results.
     """
     try:
         logger.info("Loading route_points from DB at: %s", datetime.now())
         start = datetime.now()
+
         query = sa_text("""
             SELECT edge_id, vehicle_id, route_id, lat, lon, speed, time, cardinal
             FROM trafficOptimization.route_points
@@ -99,69 +111,57 @@ def generate_congestion(
             'run_config_id': run_config_id,
             'iteration_id': iteration_id
         })
+
         logger.info("Bucketing route_points for spatial-temporal filtering at: %s", datetime.now())
-        df['lat_bucket'] = (df['lat'] * 100).astype(int)
-        df['lon_bucket'] = (df['lon'] * 100).astype(int)
-        df['time_bucket'] = (df['time'] // 10).astype(int)
         df['bucket'] = (
             df['edge_id'].astype(str) + "_" +
-            df['cardinal'].astype(str) + "_" +
-            df['lat_bucket'].astype(str) + "_" +
-            df['lon_bucket'].astype(str) + "_" +
-            df['time_bucket'].astype(str)
+            df['cardinal'] + "_" +
+            (df['lat'] * 100).astype(int).astype(str) + "_" +
+            (df['lon'] * 100).astype(int).astype(str) + "_" +
+            (df['time'] // time_step).astype(int).astype(str)
         )
+
         group_list = [group for _, group in df.groupby('bucket')]
+
         logger.info(f"Starting parallel processing of {len(group_list)} buckets at: {datetime.now()}")
         results = []
+
         with ProcessPoolExecutor(max_workers=min(16, multiprocessing.cpu_count())) as executor:
-            futures = [executor.submit(process_group, group.copy(), dist_thresh, speed_diff_thresh) for group in group_list]
+            futures = [executor.submit(process_group, group.copy(), time_step, distance_factor) for group in group_list]
             for future in as_completed(futures):
                 result = future.result()
                 if not result.empty:
                     results.append(result)
+
         if not results:
             logger.warning("No congestion pairs detected.")
-            return pd.DataFrame(columns=pd.Index([
-                'edge_id', 'vehicle1', 'vehicle1_route',
-                'vehicle2', 'vehicle2_route', 'congestion_score'
-            ]))
-        logger.info("Aggregating results and preparing insert at: %s", datetime.now())
+            return pd.DataFrame(columns=['edge_id', 'vehicle1', 'vehicle1_route', 'vehicle2', 'vehicle2_route', 'congestion_score'])
+
+        logger.info("Aggregating results at: %s", datetime.now())
         all_congestion = pd.concat(results, ignore_index=True)
+
         grouped = all_congestion.groupby(
             ['edge_id', 'vehicle_id_a', 'vehicle_id_b', 'route_id_a', 'route_id_b']
-        )['congestion_score'].sum().reset_index()
-        grouped.rename(columns={
-            'vehicle_id_a': 'vehicle1',
-            'vehicle_id_b': 'vehicle2',
-            'route_id_a': 'vehicle1_route',
-            'route_id_b': 'vehicle2_route'
-        }, inplace=True)
+        )['congestion_score'].sum().reset_index().rename(columns={
+            'vehicle_id_a': 'vehicle1', 'route_id_a': 'vehicle1_route',
+            'vehicle_id_b': 'vehicle2', 'route_id_b': 'vehicle2_route'
+        })
+
         grouped['run_configs_id'] = run_config_id
         grouped['iteration_id'] = iteration_id
         grouped['created_at'] = datetime.now()
+
         logger.info("Inserting congestion results into DB at: %s", datetime.now())
-        try:
-            grouped.to_sql(
-                'congestion_map',
-                con=session.bind,
-                if_exists='append',
-                index=False,
-                method='multi',
-                chunksize=5000
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Insertion failed: {e}", exc_info=True)
-            raise
+        grouped.to_sql('congestion_map', session.bind, if_exists='append', index=False, method='multi', chunksize=20000)
         session.commit()
-        logger.info("Congestion calculation and insert completed at: %s", datetime.now())
-        logger.info("Total runtime: %s", datetime.now() - start)
+
+        logger.info("Congestion calculation completed successfully in %s", datetime.now() - start)
         return grouped
+
     except Exception as e:
         session.rollback()
         logger.error(f"Error in generate_congestion: {e}", exc_info=True)
-        return pd.DataFrame(columns=pd.Index([
-            'edge_id', 'vehicle1', 'vehicle1_route',
-            'vehicle2', 'vehicle2_route', 'congestion_score'
-        ]))
-
+        return pd.DataFrame(columns=['edge_id', 'vehicle1', 'vehicle1_route', 'vehicle2', 'vehicle2_route', 'congestion_score'])
+    
+    finally:
+        session.close()

@@ -51,8 +51,8 @@ def plot_congestion_heatmap_interactive(
     minx, miny, maxx, maxy = merged.total_bounds
     center_lat = (miny + maxy) / 2
     center_lon = (minx + maxx) / 2
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=14, tiles='cartodbpositron')
-    m.fit_bounds([[miny, minx], [maxy, maxx]])
+    map = folium.Map(location=[center_lat, center_lon], zoom_start=14, tiles='cartodbpositron')
+    map.fit_bounds([[miny, minx], [maxy, maxx]])
 
     # Colormap
     if vmin is None:
@@ -60,7 +60,7 @@ def plot_congestion_heatmap_interactive(
     if vmax is None:
         vmax = float(merged['congestion_score'].max())
     colormap = LinearColormap(['silver', 'yellow', 'red', 'purple'], vmin=vmin, vmax=vmax, caption='Congestion Score')
-    colormap.add_to(m)
+    colormap.add_to(map)
 
     # Plot edges
     for _, row in merged.iterrows():
@@ -82,10 +82,10 @@ def plot_congestion_heatmap_interactive(
                     weight=3,
                     opacity=0.7,
                     tooltip=f"Edge ID: {row['edge_id']}<br>Score: {row['congestion_score']:.2f}"
-                ).add_to(m)
+                ).add_to(map)
         except Exception as e:
             logger.warning(f"Skipping edge {row['edge_id']} due to offset error: {e}")
-    return m
+    return map
 
 
 def plot_congestion_heatmap(

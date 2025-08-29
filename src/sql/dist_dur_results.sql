@@ -17,7 +17,33 @@ posta_qa AS (
         sr.route_id, 
         vr.distance, 
         vr.duration
-    FROM selected_routes sr 
+    FROM qa_selected_routes sr 
+    INNER JOIN vehicle_routes vr 
+        ON sr.vehicle_id = vr.vehicle_id
+        AND sr.route_id = vr.route_id
+    WHERE sr.run_configs_id = vr.run_configs_id
+      AND sr.iteration_id = vr.iteration_id
+),
+posta_sa AS (
+    SELECT 
+        sr.vehicle_id, 
+        sr.route_id, 
+        vr.distance, 
+        vr.duration
+    FROM sa_selected_routes sr 
+    INNER JOIN vehicle_routes vr 
+        ON sr.vehicle_id = vr.vehicle_id
+        AND sr.route_id = vr.route_id
+    WHERE sr.run_configs_id = vr.run_configs_id
+      AND sr.iteration_id = vr.iteration_id
+),
+posta_tabu AS (
+    SELECT 
+        sr.vehicle_id, 
+        sr.route_id, 
+        vr.distance, 
+        vr.duration
+    FROM tabu_selected_routes sr 
     INNER JOIN vehicle_routes vr 
         ON sr.vehicle_id = vr.vehicle_id
         AND sr.route_id = vr.route_id
@@ -63,6 +89,10 @@ SELECT
     SUM(s.min_dur) AS shortest_dur,
     SUM(p.distance) AS post_qa_dist, 
     SUM(p.duration) AS post_qa_dur,
+    SUM(sa.distance) AS post_sa_dist, 
+    SUM(sa.duration) AS post_sa_dur,    
+    SUM(ta.distance) AS post_tabu_dist, 
+    SUM(ta.duration) AS post_tabu_dur,
     SUM(r.distance) AS rnd_dist, 
     SUM(r.duration) AS rnd_dur,
     SUM(gr.distance) as post_gurobi_dist,
@@ -73,4 +103,8 @@ INNER JOIN posta_qa p
 INNER JOIN post_gurobi gr
     ON gr.vehicle_id = s.vehicle_id
 INNER JOIN random r 
-    ON r.vehicle_id = s.vehicle_id;
+    ON r.vehicle_id = s.vehicle_id
+INNER JOIN posta_sa sa
+    ON sa.vehicle_id = s.vehicle_id
+INNER JOIN posta_tabu ta
+    ON ta.vehicle_id = s.vehicle_id;

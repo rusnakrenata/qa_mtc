@@ -1,157 +1,148 @@
 from collections import defaultdict
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Any
+from pathlib import Path
 import logging
 import pandas as pd
-from normalize_congestion_weights import normalize_congestion_weights
-from congestion_weights import congestion_weights
-from penalized_congestion_weights import penalized_congestion_weights
-from filter_routes_for_qubo import *
+import numpy as np
 import time
-import math
+from congestion_weights import congestion_weights
+from models import QuboRunStats
+
 
 logger = logging.getLogger(__name__)
 
 def qubo_matrix(
+    session: Any,
+    run_configs_id: int,
+    iteration_id: int,
+    cluster_id: int,
+    cluster_resolution: int,
     n_vehicles: int,
-    t: int,
-    congestion_df: pd.DataFrame,
-    w_df: pd.DataFrame,
-    pd_df: pd.DataFrame,
+    route_alternatives: int,
+    weights_df: pd.DataFrame,
+    duration_penalty_df: pd.DataFrame,
+    vehicle_ids_filtered: List[int],
     vehicle_routes_df: pd.DataFrame,
-    lambda_strategy: str = "normalized",
-    fixed_lambda: Optional[float] = None,
-    filtering_percentage: float = 0.25
-) -> Tuple[Dict[Tuple[int, int], float], List[Any], pd.DataFrame, float, float, float]:
+    comp_type: str = "hybrid",
+    qubo_output_dir: Path = Path("output/qubo_matrices"),
+) -> Tuple[Dict[Tuple[int, int], float], int, float]:
     """
-    Constructs the QUBO dictionary for the traffic assignment problem with 4D weights.
+    Construct QUBO matrix to minimize congestion.
+
     Args:
-        n_vehicles: Number of vehicles
-        t: Number of route alternatives per vehicle
-        congestion_df: Congestion DataFrame (for filtering)
-        w_df: Congestion weights DataFrame
-        vehicle_routes_df: Vehicle routes DataFrame
-        lambda_strategy: "normalized" or "max_weight"
-        fixed_lambda: λ if using normalized strategy
+        session: SQLAlchemy session
+        run_configs_id: Run configuration ID
+        iteration_id: Current iteration ID
+        cluster_id: ID of the cluster
+        route_alternatives: Number of route alternatives per vehicle
+        weights_df: Pairwise congestion weights
+        duration_penalty_df: Duration penalties per vehicle-route
+        vehicle_ids_filtered: List of vehicle IDs
+        vehicle_routes_df: Valid vehicle routes
+        comp_type: Solver type (e.g., 'hybrid', 'hybrid_cqm')
+        qubo_output_dir: Directory for QUBO output files
+
     Returns:
-        Q: QUBO matrix as a dictionary {(q1, q2): value}
-        vehicle_ids_filtered: The filtered list of vehicle IDs used in QUBO
+        Q: QUBO dictionary
+        route_alternatives: Echoed input
+        lambda_penalty: Penalty strength for constraints
     """
     start_time = time.time()
+
     logger.info("Starting QUBO vehicle filtering...")
-    vehicle_ids_filtered, affected_edges_df = select_vehicles_by_leiden_joined_clusters(congestion_df,target_size=n_vehicles*filtering_percentage, resolution=0.7)
-    #select_vehicles_simple(congestion_df)  #select_vehicles_by_cumulative_congestion(congestion_df, filtering_percentage or 1.0)
     n_filtered = len(vehicle_ids_filtered)
-    logger.info(f"Vehicle filtering complete. {n_filtered} vehicles selected. Time elapsed: {time.time() - start_time:.2f}s")
+    logger.info(f"{n_filtered} vehicles selected. Time elapsed: {time.time() - start_time:.2f}s")
 
-    logger.info("Computing congestion weights for filtered vehicles...")
-    weights_start = time.time()
-    if lambda_strategy == "normalized":
-        w, max_w = normalize_congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df)
-        logger.info(f"Using normalized weights max_w={max_w}")
-    elif lambda_strategy == "penalized":
-        w, max_w, penalty_matrix = penalized_congestion_weights(w_df, pd_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df)
-        logger.info(f"Using penalized weights max_w={max_w}")
-    else:
-        w, max_w = congestion_weights(w_df, n_filtered, t, vehicle_ids_filtered, vehicle_routes_df)
-        logger.info(f"Using max_weight strategy max_w={max_w}")
-    logger.info(f"Congestion weights computed. Time elapsed: {time.time() - weights_start:.2f}s")
+    logger.info("Computing congestion weights...")
+    congestion_w, max_w = congestion_weights(weights_df, n_filtered, route_alternatives, vehicle_ids_filtered, vehicle_routes_df)
+    logger.info(f"Max congestion weight: {max_w:.4f}")
 
-    pd_df = pd.DataFrame(pd_df[pd_df['vehicle'].isin(vehicle_ids_filtered)])
-
-    # Map vehicle and route IDs to their indices
+    duration_penalty_df = duration_penalty_df[duration_penalty_df['vehicle'].isin(vehicle_ids_filtered)]
     vehicle_id_to_idx = {int(v): i for i, v in enumerate(vehicle_ids_filtered)}
     route_ids = sorted(vehicle_routes_df['route_id'].unique())
     route_id_to_idx = {int(r): k for k, r in enumerate(route_ids)}
 
-    print(vehicle_id_to_idx)
-
-    # Initialize penalty matrix
-    penalty_matrix = np.zeros((len(vehicle_ids_filtered), len(route_ids)))
-    
-
-    # Fill penalty matrix
-    for _, row in pd_df.iterrows():
+    penalty_matrix = np.zeros((n_filtered, len(route_ids)))
+    for _, row in duration_penalty_df.iterrows():
         i = vehicle_id_to_idx[int(row['vehicle'])]
         k = route_id_to_idx[int(row['route'])]
         penalty_matrix[i, k] = row['penalty']
 
-    # Transform penalty matrix to list penalties
-    penalties = []
-    for i in range(n_filtered):
-        for k in range(2):
-            penalties.append(penalty_matrix[i, k])
- 
-    logger.info("Constructing QUBO objective terms...")
-    qubo_start = time.time()
+    penalties = [penalty_matrix[i, k] for i in range(n_filtered) for k in range(route_alternatives)]
+
     Q = defaultdict(float)
     for i in range(n_filtered):
         for j in range(i + 1, n_filtered):
-            for k1 in range(t):
-                for k2 in range(t):
-                    q1 = i * t + k1
-                    q2 = j * t + k2
-                    Q[(q1, q2)] += w[i][j][k1][k2]
-    logger.info(f"QUBO objective constructed: {len(Q)} terms. Time: {time.time() - qubo_start:.2f}s")
-    
-    # Build set of valid (vehicle, route) pairs
+            for k1 in range(route_alternatives):
+                for k2 in range(route_alternatives):
+                    q1 = i * route_alternatives + k1
+                    q2 = j * route_alternatives + k2
+                    Q[(q1, q2)] += congestion_w[i][j][k1][k2]
+
     valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
+    dynamic_penalties, q_indices, not_real_routes_indices = [], [], []
 
-    # Step 1: Compute all dynamic penalties and store them
-    dynamic_penalties = []
-    q_indices = []
-    q_indices_adj = []
-    not_real_routes_indices = []
-    for i in range(n_filtered):
-        vi = vehicle_ids_filtered[i]
-        # Go through ALL possible routes (1 to t)
-        for k in range(1, t + 1):
-            q = i * t + (k - 1)
-            if (vi, k) in valid_pairs:
-                # Real route: use dynamic penalty
-                #row_sum = sum(Q.get((q, j), 0) for j in range(n_filtered * t))
-                #col_sum = sum(Q.get((idx, q), 0) for idx in range(n_filtered * t))
-
-                # Get all row values for variable q
-                row_values = [Q.get((q, j), 0) for j in range(n_filtered * t)]
-                # Get all column values for variable q  
-                col_values = [Q.get((idx, q), 0) for idx in range(n_filtered * t)]
-
-                # Calculate sum of max of pairs for row values
-                row_sum = sum(max(row_values[i], row_values[i+1]) for i in range(0, len(row_values)-1, 2))
-
-                # Calculate sum of max of pairs for column values
-                col_sum = sum(max(col_values[i], col_values[i+1]) for i in range(0, len(col_values)-1, 2))
-
-                lambda_penalty_dynamic = ( row_sum + col_sum )
-                dynamic_penalties.append( lambda_penalty_dynamic )
-                q_indices.append(q)
+    for i, vehicle_id in enumerate(vehicle_ids_filtered):
+        for route_num in range(1, route_alternatives + 1):
+            q = i * route_alternatives + (route_num - 1)
+            q_indices.append(q)
+            if (vehicle_id, route_num) in valid_pairs:
+                row_values = [Q.get((q, j), 0) for j in range(n_filtered * route_alternatives)]
+                col_values = [Q.get((j, q), 0) for j in range(n_filtered * route_alternatives)]
+                row_sum = sum(max(row_values[x], row_values[x+1]) for x in range(0, len(row_values)-1, 2))
+                col_sum = sum(max(col_values[x], col_values[x+1]) for x in range(0, len(col_values)-1, 2))
+                dynamic_penalties.append(row_sum + col_sum)
             else:
-                # Non-real route: use high penalty
-                q_indices.append(q)
                 not_real_routes_indices.append(q)
 
-    ### Na diagonále musí byť konštantná hodnota, aby sa zabránilo degenerácii
+    lambda_penalty = max(dynamic_penalties) if dynamic_penalties else 1.0
+    #lambda_penalty = lambda_penalty * 1.2 # Adjusted penalty for better performance``
+    logger.info(f"Dynamic penalties calculated: {len(dynamic_penalties)} values, max penalty: {max(dynamic_penalties) if dynamic_penalties else 0.0}")   
 
+    if comp_type != "hybrid_cqm":
+        logger.info("Applying one-hot constraints...")
+        for q in q_indices:
+            if q in not_real_routes_indices:
+                Q[(q, q)] += lambda_penalty
+            else:
+                Q[(q, q)] += -lambda_penalty + penalties[q]
 
-    # Step 2: Find the maximum penalty for real routes
-    lambda_penalty = max(dynamic_penalties) 
-    logger.info(f"lambda_penalty={lambda_penalty}")
+        for i in range(n_filtered):
+            for k1 in range(route_alternatives):
+                q1 = i * route_alternatives + k1
+                for k2 in range(route_alternatives):
+                    if k1 != k2:
+                        q2 = i * route_alternatives + k2
+                        Q[(q1, q2)] += lambda_penalty
+    else:
+        logger.info("Hybrid CQM mode: skipping one-hot constraints.")
+        for q in q_indices:
+            if q not in not_real_routes_indices:
+                Q[(q, q)] += penalties[q]
 
-    # Step 3: Apply the max penalty to all diagonal elements
-    for q in q_indices:
-        Q[(q, q)] += lambda_penalty * (1 - 2)+penalties[q] if q not in not_real_routes_indices else lambda_penalty 
+    logger.info(f"QUBO matrix built with {len(Q)} terms for {n_filtered} vehicles.")
 
-    for i in range(n_filtered):
-        # Go through ALL possible routes (1 to t)
-        for k1 in range(1, t + 1):
-            q1 = i * t + (k1 - 1)
-            for k2 in range(1, t ):
-                if k1 != t:
-                    q2 = q1 +k2
-                else:
-                    q2 = q1 -1
-                Q[(q1, q2)] += lambda_penalty#abs(Q.get((q1, q1), 0)) #lambda_penalty 
-    #print(Q)
-    logger.info(f"QUBO matrix constructed: {len(Q)} nonzero entries, {n_filtered} vehicles. Time elapsed: {time.time() - qubo_start:.2f}s")
-    logger.info(f"Total QUBO matrix function time: {time.time() - start_time:.2f}s")
-    return dict(Q), vehicle_ids_filtered, affected_edges_df, n_filtered, t, lambda_penalty
+    Q_matrix = np.zeros((max(idx for pair in Q for idx in pair) + 1,) * 2)
+    for (q1, q2), value in Q.items():
+        Q_matrix[q1, q2] = value
+
+    Q_df = pd.DataFrame(Q_matrix)
+    Q_df.columns = [f"{i:9g}" for i in range(Q_df.shape[1])]
+    Q_df.index = [f"{i:9g}" for i in range(Q_df.shape[0])]
+
+    Q_df.to_csv(qubo_output_dir / f"qubo_matrix_{cluster_id}.csv", index=True, header=True, float_format='%9g')
+
+    stats = QuboRunStats(
+        run_configs_id=run_configs_id,
+        iteration_id=iteration_id,
+        filtering_percentage=n_filtered / n_vehicles,
+        cluster_resolution=cluster_resolution,
+        cluster_id=cluster_id,
+        n_vehicles=n_vehicles,
+        n_filtered_vehicles=n_filtered,
+        max_weight = max_w
+    )
+    session.add(stats)
+    session.commit()
+
+    return dict(Q), route_alternatives, lambda_penalty

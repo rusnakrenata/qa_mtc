@@ -186,3 +186,36 @@ def convert_valhalla_leg_to_google_like_steps(leg):
 
 
 
+def check_bqm_against_solver_limits(Q):
+    import dimod
+    from dwave.system import LeapHybridBQMSampler, LeapHybridCQMSampler
+
+    dwave_constraints_check= True
+    bqm = dimod.BQM.from_qubo(Q)
+    num_variables = len(bqm.variables)
+    num_linear = len(bqm.linear)
+    num_quadratic = len(bqm.quadratic)
+    num_biases = num_linear + num_quadratic
+
+    sampler = LeapHybridCQMSampler()
+    max_vars_cqm = sampler.properties["maximum_number_of_variables"]
+    max_biases_cqm = sampler.properties["maximum_number_of_biases"]
+
+    sampler = LeapHybridBQMSampler()
+    max_vars_bqm = sampler.properties["maximum_number_of_variables"]
+    max_biases_bqm = sampler.properties["maximum_number_of_biases"]
+    print("Number of variables:", num_variables)
+    print("Number of linear biases:", num_linear)
+    print("Number of quadratic biases:", num_quadratic)
+    print("Total number of biases:", num_biases)
+    print("BQM Solver maximum_number_of_variables:", max_vars_bqm)
+    print("BQM Solver maximum_number_of_biases:", max_biases_bqm)
+    print("CQM Solver maximum_number_of_variables:", max_vars_cqm)
+    print("CQM Solver maximum_number_of_biases:", max_biases_cqm)
+    if num_variables > max(max_vars_bqm, max_vars_cqm):
+        dwave_constraints_check = False
+        logger.error("Too many variables for this solver!")
+    if num_biases > max(max_biases_bqm, max_biases_cqm):
+        dwave_constraints_check = False
+        logger.error("Too many biases for this solver!")
+    return dwave_constraints_check

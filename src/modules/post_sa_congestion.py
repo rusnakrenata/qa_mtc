@@ -2,17 +2,17 @@ import pandas as pd
 from sqlalchemy import text as sa_text
 import logging
 from typing import Any, List
-from models import QASelectedRoute
+from models import SaSelectedRoute
 
 logger = logging.getLogger(__name__)
 
-def post_qa_congestion(
+def post_sa_congestion(
     session: Any,
     run_configs_id: int,
     iteration_id: int,
     all_vehicle_ids: List[Any],
     optimized_vehicle_ids: List[Any],
-    qa_assignment: List[int],
+    sa_assignement: List[int],
     method: str = "duration"
 ) :
     """
@@ -23,7 +23,7 @@ def post_qa_congestion(
         iteration_id: Iteration number
         all_vehicle_ids: List of all vehicle IDs in the simulation
         optimized_vehicle_ids: List of vehicle IDs used in QUBO/QA
-        qa_assignment: List of selected route indices (0-based) for optimized vehicles
+        sa_assignement: List of selected route indices (0-based) for optimized vehicles
         method: 'distance' or 'duration' for non-optimized vehicles
     Returns:
         DataFrame with columns ['edge_id', 'congestion_score']
@@ -32,9 +32,9 @@ def post_qa_congestion(
         vehicle_route_pairs = []
 
         # For optimized vehicles, use QA assignment
-        num_routes = len(qa_assignment) // len(optimized_vehicle_ids)
+        num_routes = len(sa_assignement) // len(optimized_vehicle_ids)
         for idx, vehicle_id in enumerate(optimized_vehicle_ids):
-            assignment = qa_assignment[num_routes * idx : num_routes * (idx + 1)]
+            assignment = sa_assignement[num_routes * idx : num_routes * (idx + 1)]
             if assignment.count(1) != 1:
                 # Assign the shortest route based on the method (duration or distance)
                 sql = sa_text(f'''
@@ -90,14 +90,14 @@ def post_qa_congestion(
 
        
         # Clear previous data for this run_config and iteration
-        session.query(QASelectedRoute).filter(
-            QASelectedRoute.run_configs_id == run_configs_id,
-            QASelectedRoute.iteration_id == iteration_id
+        session.query(SaSelectedRoute).filter(
+            SaSelectedRoute.run_configs_id == run_configs_id,
+            SaSelectedRoute.iteration_id == iteration_id
         ).delete()
         
         # Insert new selected routes using the model
         selected_routes = [
-            QASelectedRoute(
+            SaSelectedRoute(
                 run_configs_id=run_configs_id,
                 iteration_id=iteration_id,
                 vehicle_id=vehicle_id,
@@ -126,7 +126,7 @@ def post_qa_congestion(
             WITH 
             filtered_routes AS (
                 SELECT vehicle_id, route_id
-                FROM trafficOptimization.qa_selected_routes
+                FROM trafficOptimization.sa_selected_routes
                 WHERE run_configs_id = :run_configs_id 
                 AND iteration_id = :iteration_id
             ),
