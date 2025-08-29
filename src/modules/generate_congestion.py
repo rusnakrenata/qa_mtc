@@ -118,7 +118,7 @@ def generate_congestion(
             df['cardinal'] + "_" +
             (df['lat'] * 100).astype(int).astype(str) + "_" +
             (df['lon'] * 100).astype(int).astype(str) + "_" +
-            (df['time'] // 10).astype(int).astype(str)
+            (df['time'] // time_step).astype(int).astype(str)
         )
 
         group_list = [group for _, group in df.groupby('bucket')]
@@ -152,7 +152,7 @@ def generate_congestion(
         grouped['created_at'] = datetime.now()
 
         logger.info("Inserting congestion results into DB at: %s", datetime.now())
-        grouped.to_sql('congestion_map', session.bind, if_exists='append', index=False, method='multi', chunksize=10000)
+        grouped.to_sql('congestion_map', session.bind, if_exists='append', index=False, method='multi', chunksize=20000)
         session.commit()
 
         logger.info("Congestion calculation completed successfully in %s", datetime.now() - start)

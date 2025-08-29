@@ -214,8 +214,8 @@ def check_bqm_against_solver_limits(Q):
     print("CQM Solver maximum_number_of_biases:", max_biases_cqm)
     if num_variables > max(max_vars_bqm, max_vars_cqm):
         dwave_constraints_check = False
-        logger.warning("Too many variables for this solver!")
+        logger.error("Too many variables for this solver!")
     if num_biases > max(max_biases_bqm, max_biases_cqm):
         dwave_constraints_check = False
-        logger.warning("Too many biases for this solver!")
+        logger.error("Too many biases for this solver!")
     return dwave_constraints_check

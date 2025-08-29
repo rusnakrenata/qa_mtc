@@ -51,7 +51,7 @@ def get_clusters_by_connectivity(
     initial_clusters = [list(community) for community in part]
 
     # Merge small clusters
-    merged_clusters = initial_clusters#merge_small_clusters(g, initial_clusters, min_cluster_size)
+    merged_clusters = merge_small_clusters(g, initial_clusters, min_cluster_size) #initial_clusters
 
     # Process clusters
     clusters_info = []

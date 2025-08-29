@@ -42,5 +42,4 @@ def get_city_data_from_db(
         logger.error(f"Error fetching city data from DB: {e}", exc_info=True)
         return gpd.GeoDataFrame(), gpd.GeoDataFrame()
     
-    finally:
-        session.close()
+    

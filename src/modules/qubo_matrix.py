@@ -96,7 +96,8 @@ def qubo_matrix(
                 not_real_routes_indices.append(q)
 
     lambda_penalty = max(dynamic_penalties) if dynamic_penalties else 1.0
-    logger.info(f"Lambda penalty: {lambda_penalty:.4f}")
+    #lambda_penalty = lambda_penalty * 1.2 # Adjusted penalty for better performance``
+    logger.info(f"Dynamic penalties calculated: {len(dynamic_penalties)} values, max penalty: {max(dynamic_penalties) if dynamic_penalties else 0.0}")   
 
     if comp_type != "hybrid_cqm":
         logger.info("Applying one-hot constraints...")

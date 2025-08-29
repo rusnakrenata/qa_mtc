@@ -126,8 +126,8 @@ cong AS (
 )
 SELECT 
     qa.qa_penalty + cong.cong_post_qa AS QA_COST,
-    sa.sa_penalty + cong.cong_post_qa AS SA_COST,
-    tabu.tabu_penalty + cong.cong_post_qa AS TABU_COST,
+    sa.sa_penalty + cong.cong_post_sa AS SA_COST,
+    tabu.tabu_penalty + cong.cong_post_tabu AS TABU_COST,
     gurobi.gurobi_penalty + cong.cong_post_gurobi AS GUROBI_COST,
     cbc.cbc_penalty + cong.cong_post_cbc AS CBC_COST,
     random.random_penalty + cong.cong_random AS RANDOM_COST,

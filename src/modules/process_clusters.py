@@ -4,6 +4,7 @@ from qa_testing import qa_testing
 from gurobi_testing import gurobi_testing
 from qubo_matrix import qubo_matrix
 from pathlib import Path
+from utils import check_bqm_against_solver_limits
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,8 @@ def process_clusters(
             qubo_output_dir=qubo_output_dir
         )
         
+        
+        check_bqm_against_solver_limits(Q_matrix)
 
         # Q_matrixuantum Annealing
         qa_result = qa_testing(

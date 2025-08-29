@@ -96,6 +96,4 @@ def store_city_to_db(
         logger.error(f"Error storing city to DB: {e}", exc_info=True)
         session.rollback()
         return None
-    
-    finally:
-        session.close()
+

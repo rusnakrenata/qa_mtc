@@ -51,13 +51,12 @@ def get_or_create_city(
             attraction_point=attraction_point,
             d_alternatives=d_alternatives,
         )
+        #city = session.query(City).filter_by(**filters).first()
 
     # Now it's safe to load from DB using city.city_id
-    else:
-        city = session.query(City).filter_by(city_id=city.city_id).first()
-        nodes_df, edges_df = get_city_data_from_db(session, city.city_id)
-      # Close the session to avoid leaks
 
+    city = session.query(City).filter_by(city_id=city.city_id).first()
+    nodes_df, edges_df = get_city_data_from_db(session, city.city_id)
     city_id = city.city_id
 
     # Don't close the session here; let the caller manage it.

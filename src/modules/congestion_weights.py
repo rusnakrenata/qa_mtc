@@ -54,15 +54,16 @@ def congestion_weights(
     # Identify invalid (vehicle, route) pairs
     invalid_pairs = get_invalid_vehicle_route_pairs(vehicle_routes_df, route_alternatives)
 
-    # Determine max weight from the given DataFrame
-    w_max = float(weights_df['weighted_congestion_score'].max()) if not weights_df.empty else 1.0
-
     # Filter weights DataFrame for relevant vehicle IDs
     vehicle_ids_set = set(int(v) for v in vehicle_ids)
     weights_df = weights_df[
         weights_df['vehicle1'].apply(lambda x: int(x) in vehicle_ids_set) &
         weights_df['vehicle2'].apply(lambda x: int(x) in vehicle_ids_set)
     ]
+
+    # Determine max weight from the given DataFrame
+    w_max = float(weights_df['weighted_congestion_score'].max()) if not weights_df.empty else 1.0
+
 
     # Create a lookup dictionary for congestion scores
     weights_lookup = {}

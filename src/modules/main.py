@@ -35,6 +35,7 @@ from visualize_and_save_congestion_heatmap import visualize_and_save_congestion_
 from save_congestion_summary import save_congestion_summary
 from run_sql_query import run_sql_query
 
+
 # ---------- CONSTANTS ----------
 OFFSET_DEG = 0.0000025
 MAPS_OUTPUT_DIR = Path("files_html")
@@ -137,13 +138,14 @@ def main():
             weights_df, duration_penalty_df = get_congestion_weights(session, run_configs_id=run_config.run_configs_id,
                                                                       iteration_id=iteration_id)
 
-            all_vehicle_ids = vehicles_gdf["vehicle_id"].tolist()
-            #clusters = get_clusters_by_connectivity(congestion_df, resolution=CLUSTER_RESOLUTION, min_cluster_size=MIN_CLUSTER_SIZE)
-            #if not clusters:
-            clusters = [(all_vehicle_ids, congestion_df.groupby('edge_id', as_index=False)
-                            .agg({'congestion_score': 'sum'}), 0.0, len(all_vehicle_ids))]
+            all_vehicle_ids = routes_df["vehicle_id"].unique().tolist()
+            print(f"Total vehicles: {len(all_vehicle_ids)}")
+            clusters = get_clusters_by_connectivity(congestion_df, resolution=CLUSTER_RESOLUTION, min_cluster_size=MIN_CLUSTER_SIZE)
+            if not clusters:
+                clusters = [(all_vehicle_ids, congestion_df.groupby('edge_id', as_index=False).agg({'congestion_score': 'sum'}), 0.0, len(all_vehicle_ids))]
 
-            #clusters = clusters[:MAX_CLUSTERS] if MAX_CLUSTERS else clusters
+            clusters = clusters[:MAX_CLUSTERS] if MAX_CLUSTERS else clusters
+
 
             if FULL:
                 (
@@ -277,6 +279,7 @@ def main():
                 post_qa_df.get("congestion_score"),
                 random_df.get("congestion_score"),
                 post_gurobi_df.get("congestion_score"),
+                congestion_df.get("congestion_score"),
             ]
             for extra_df in (sa_df, tabu_df, cbc_df):
                 if extra_df is not None and "congestion_score" in extra_df:
