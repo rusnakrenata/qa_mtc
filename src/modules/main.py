@@ -275,11 +275,11 @@ def main():
             # Collect all available score series for consistent vmin/vmax
             score_sources = [
                 shortest_dur_df.get("congestion_score"),
-                shortest_dis_df.get("congestion_score"),
+                #shortest_dis_df.get("congestion_score"),
                 post_qa_df.get("congestion_score"),
-                random_df.get("congestion_score"),
+                #random_df.get("congestion_score"),
                 post_gurobi_df.get("congestion_score"),
-                congestion_df.get("congestion_score"),
+                #congestion_df.get("congestion_score"),
             ]
             for extra_df in (sa_df, tabu_df, cbc_df):
                 if extra_df is not None and "congestion_score" in extra_df:

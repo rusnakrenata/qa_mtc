@@ -11,7 +11,7 @@ with base as (select
     #gr.time_limit_seconds,
 	#gr.best_bound,
 	#gr.gap,
-	FORMAT(qr.qubo_density * 100, 2) AS matrix_density,
+	FORMAT((qr.qubo_density*qubo_size*qubo_size - qubo_size)*2/(qubo_size*(qubo_size-1))*100,2) as matrix_density,
     CONCAT(FORMAT((qr.energy - gr.objective_value)/NULLIF(ABS(gr.objective_value), 0) * 100,2), "%") as delta_energy
 from qa_results qr 
 inner join  gurobi_results gr on qr.run_configs_id = gr.run_configs_id
