@@ -1,5 +1,5 @@
 # Quantum-Inspired Traffic Optimization: A Scalable and Dynamic Approach for Congestion Minimization in Urban Environments
-[[PAPER]]()
+[[PAPER]](https://arxiv.org/pdf/2510.06053)
 
 ---
 
@@ -48,18 +48,27 @@ python src/modules/main.py
    - Generates multiple alternative routes per vehicle using the Valhalla routing engine.
 4. **Congestion Calculation:**
    - Computes pairwise congestion scores for all vehicle-route pairs based on spatiotemporal overlap.
-5. **QUBO Matrix Construction:**
-   - Builds a QUBO matrix encoding congestion and assignment constraints using 4D weights.
-6. **Vehicle Filtering for QUBO:**
-   - Selects a subset of vehicles for tractable optimization (default: top congestion scores).
-7. **QUBO/QA Optimization:**
-   - Solves the QUBO using quantum (D-Wave) or classical solvers (`qa_testing.py`).
+5. **Vehicle Clustering:**
+   - Groups vehicles by connectivity using the Leiden community detection algorithm.
+   - Creates clusters based on congestion interactions between vehicles.
+   - Ensures minimum cluster sizes by merging small clusters with neighbors.
+6. **QUBO Matrix Construction:**
+   - Builds a QUBO matrix for each cluster separately, encoding congestion and assignment constraints.
+   - Processes clusters in parallel, making the optimization scalable for large vehicle fleets.
+7. **Multi-Solver Optimization:**
+   - Solves each cluster's QUBO using multiple approaches:
+     - **Quantum Annealing**: D-Wave quantum computers (hybrid, CQM, QPU modes)
+     - **Classical Solvers**: Simulated Annealing, Tabu Search, Gurobi, CBC
+   - Compares performance across different solution methods.
 8. **Assignment Extraction:**
-   - Extracts the optimal or near-optimal assignment from the QUBO/QA solution.
-9. **Post-QA Congestion Analysis:**
-   - Recomputes congestion based on the optimized assignment and baseline heuristics for non-optimized vehicles.
+   - Extracts the optimal or near-optimal assignment from each solver's solution.
+   - Aggregates results across all clusters to form the complete vehicle assignment.
+9. **Post-Optimization Congestion Analysis:**
+   - Recomputes congestion based on the optimized assignments from different solvers.
+   - Compares congestion reduction achieved by each method.
 10. **Visualization:**
-   - Generates interactive heatmaps of congestion for different routing strategies.
+    - Generates interactive heatmaps of congestion for different routing strategies.
+    - Visualizes cluster distributions and optimization results.
 
 **Workflow Diagram (textual):**
 ```
@@ -97,6 +106,29 @@ qa_mtc/
   pytest tests/
   ```
 - Tests cover core logic: filtering, QUBO construction, congestion calculation, etc.
+
+---
+
+## Multi-Solver Approach
+
+The system supports multiple optimization approaches for solving QUBO problems:
+
+### Quantum Annealing (D-Wave)
+- **Hybrid**: `LeapHybridSampler` for larger problems
+- **CQM**: `LeapHybridCQMSampler` with explicit constraints
+- **QPU**: Direct quantum processing unit access
+
+### Classical Solvers
+- **Simulated Annealing**: `SimulatedAnnealingSampler` from D-Wave Ocean
+- **Tabu Search**: `TabuSampler` for local search optimization
+- **Gurobi**: Commercial MIP solver for exact solutions
+- **CBC**: Open-source linear programming solver
+
+### Performance Comparison
+- All solvers process the same QUBO formulation per cluster
+- Results are stored in separate database tables for analysis
+- Execution times, solution quality, and energy values are tracked
+- SQL queries in `sql/` directory provide comparative analysis
 
 ---
 
@@ -184,13 +216,23 @@ The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
 
 ## 8. Complexity Analysis
 
-- **Number of variables:** `N = n · t`
+### Without Clustering
+- **Number of variables:** `N = n · t` (all vehicles × routes)
 - **QUBO matrix size:** `O(N²)` in the dense case
-- The original assignment problem has `t^n` valid solutions, making it **exponential in n**
-- The QUBO formulation does **not reduce complexity** but transforms the problem into a form that can be handled by specialized solvers
-- The problem remains **NP-hard**, but the QUBO structure makes it solvable using:
-  - Quantum annealing (e.g., D-Wave)
-  - Classical heuristics (e.g., simulated annealing, tabu search)
+- **Problem size:** Exponential in number of vehicles
+
+### With Clustering
+- **Number of clusters:** `C` (typically `C << n`)
+- **Variables per cluster:** `N_c = n_c · t` (cluster vehicles × routes)
+- **Total complexity:** `O(∑(N_c²))` where `∑N_c = N`
+- **Parallel processing:** Clusters solved independently
+- **Scalability improvement:** Linear scaling with number of clusters
+
+### Benefits
+- **Memory efficiency:** Smaller QUBO matrices per cluster
+- **Solution quality:** Maintains optimization quality within high-interaction groups
+- **Computational speed:** Parallel cluster processing
+- **Hardware compatibility:** Fits within quantum annealer limits
 
 ---
 
@@ -257,10 +299,90 @@ graph TD
     F --> G[Generate Vehicle Routes]
     G --> H[Compute Congestion]
     H --> I[Get Congestion Weights]
-    I --> J[QUBO Matrix Construction & Filtering]
-    J --> K[Save QUBO Matrix]
-    K --> L[Compute Shortest Routes]
-    L --> M[Visualize Congestion]
-    M --> N[End]
+    I --> J[Vehicle Clustering - Leiden Algorithm]
+    J --> K[Process Each Cluster]
+    K --> L[Build QUBO Matrix per Cluster]
+    L --> M[Multi-Solver Optimization]
+    M --> N[Quantum Annealing]
+    M --> O[Simulated Annealing]
+    M --> P[Tabu Search]
+    M --> Q[Gurobi]
+    M --> R[CBC]
+    N --> S[Aggregate Results]
+    O --> S
+    P --> S
+    Q --> S
+    R --> S
+    S --> T[Post-Optimization Analysis]
+    T --> U[Visualize Results]
+    U --> V[End]
 ```
 
+## Vehicle Clustering Algorithm
+
+The system implements an intelligent clustering approach to make QUBO optimization scalable for large vehicle fleets:
+
+### Leiden Community Detection
+- Uses the **Leiden algorithm** to detect communities in the vehicle congestion network
+- Vehicles are nodes, congestion interactions are weighted edges
+- Resolution parameter controls cluster granularity (configurable via `CLUSTER_RESOLUTION`)
+
+### Cluster Processing
+- **`get_clusters_by_connectivity()`**: Groups vehicles by total congestion interaction
+- **`merge_small_clusters()`**: Ensures minimum cluster sizes by merging small clusters with high-connectivity neighbors
+- **Parallel Processing**: Each cluster is optimized independently, enabling scalability
+
+### Benefits
+- **Scalability**: Breaks O(n²) problems into multiple smaller sub-problems
+- **Quality**: Maintains optimization quality by preserving high-interaction vehicle groups
+- **Flexibility**: Supports different minimum cluster sizes and resolution parameters
+
+---
+
+# Clustering and Filtering
+          # Vehicle clustering logic (Leiden algorithm)
+                # Process clusters (QA + Gurobi)
+           # Process clusters (all solvers)
+  
+  # QUBO Construction
+                     # QUBO matrix construction per cluster
+  congestion_weights.py            # Congestion weight calculations
+  
+  # Solvers
+                      # Quantum Annealing (D-Wave)
+                      # Simulated Annealing
+                    # Tabu Search
+                  # Gurobi optimization
+                     # CBC solver
+  
+  # Other modules
+                          # Database models
+  generate_*.py                    # Vehicle and route generation
+  ...                              # Other utility modules
+files_csv/                         # QUBO matrices output
+files_html/                        # Visualization heatmaps
+
+---
+
+## Configuration
+
+Key parameters in `src/modules/config.py`:
+
+```python
+# Clustering Parameters
+CLUSTER_RESOLUTION = 4.0          # Leiden algorithm resolution
+MIN_CLUSTER_SIZE = 100            # Minimum vehicles per cluster
+MAX_CLUSTERS = None               # Limit number of clusters (None = all)
+
+# Solver Selection
+COMP_TYPE = "hybrid"              # QA solver type
+FULL = False                      # True = run all solvers, False = QA + Gurobi only
+
+# Vehicle Generation
+N_VEHICLES = 18000                # Total vehicles to simulate
+K_ALTERNATIVES = 3                # Routes per vehicle
+```
+
+
+
+[definitionLink]: https://arxiv.org/pdf/2510.06053

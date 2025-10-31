@@ -28,7 +28,7 @@ from utils import (
 
 logger = logging.getLogger(__name__)
 
-def insert_in_batches(session, model_class, obj_list, batch_size=5000):
+def insert_in_batches(session, model_class, obj_list, batch_size=50000):
     # Use all actual DB columns (no 'id' filter since you confirmed it's not used)
     table_columns = [col.name for col in model_class.__table__.columns]
 
