@@ -38,6 +38,40 @@ python src/modules/main.py
 
 ---
 
+## Configuration
+
+Key parameters in `src/modules/config.py`:
+
+```python
+# --- Simulation/City Parameters ---
+CITY_NAME = "Barcelona, Spain"
+CENTER_COORDS = (41.392937, 2.145062)  # Barcelona coordinates
+RADIUS_KM = 3.2                         # City radius for simulation
+N_VEHICLES = 10000                      # Total vehicles to simulate
+K_ALTERNATIVES = 3                      # Routes per vehicle
+MIN_LENGTH = 500                        # Minimum route length (meters)
+MAX_LENGTH = 4000                       # Maximum route length (meters)
+TIME_STEP = 10                          # Time step for congestion calculation
+TIME_WINDOW = 300                       # Time window for congestion calculation
+DISTANCE_FACTOR = 4.0                   # Factor to adjust distance in congestion calculations
+
+# --- Clustering Parameters ---
+CLUSTER_RESOLUTION = 4.0                # Leiden algorithm resolution parameter
+MIN_CLUSTER_SIZE = 500                  # Minimum vehicles per cluster
+MAX_CLUSTERS = 200                      # Maximum number of clusters to process
+
+# --- QUBO/QA Parameters ---
+COMP_TYPE = "hybrid"                    # QA solver type: 'sa', 'hybrid', 'hybrid_cqm', 'qpu'
+ROUTE_METHOD = "duration"               # Route optimization method: "duration" or "distance"
+FULL = False                            # True = run all solvers, False = QA + Gurobi only
+
+# --- Optional Attraction Point ---
+ATTRACTION_POINT = None                 # (lat, lon) tuple for attraction-based vehicle generation
+D_ALTERNATIVES = None                   # Number of attraction alternatives
+```
+
+---
+
 ## Workflow
 
 1. **City Graph Extraction:**
@@ -57,7 +91,7 @@ python src/modules/main.py
    - Processes clusters in parallel, making the optimization scalable for large vehicle fleets.
 7. **Multi-Solver Optimization:**
    - Solves each cluster's QUBO using multiple approaches:
-     - **Quantum Annealing**: D-Wave quantum computers (hybrid, CQM, QPU modes)
+     - **Quantum Annealing**: D-Wave quantum computers (hybrid BQM, CQM, QPU modes)
      - **Classical Solvers**: Simulated Annealing, Tabu Search, Gurobi, CBC
    - Compares performance across different solution methods.
 8. **Assignment Extraction:**
@@ -98,24 +132,14 @@ qa_mtc/
 
 ---
 
-## Testing
-
-- Unit tests are (or will be) located in the `tests/` directory.
-- To run all tests:
-  ```bash
-  pytest tests/
-  ```
-- Tests cover core logic: filtering, QUBO construction, congestion calculation, etc.
-
----
 
 ## Multi-Solver Approach
 
 The system supports multiple optimization approaches for solving QUBO problems:
 
 ### Quantum Annealing (D-Wave)
-- **Hybrid**: `LeapHybridSampler` for larger problems
-- **CQM**: `LeapHybridCQMSampler` with explicit constraints
+- **Hybrid BQM**: `LeapHybridBQMSampler` for larger problems
+- **Hyrid CQM**: `LeapHybridCQMSampler` with explicit constraints
 - **QPU**: Direct quantum processing unit access
 
 ### Classical Solvers
@@ -204,14 +228,36 @@ The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
 
 ## 7. Algorithm: QUBO Matrix Construction
 
-- **Step 1:** Filter vehicles for QUBO (e.g., by congestion impact).
-- **Step 2:** Compute or normalize congestion weights `w[i][j][k1][k2]` for the filtered set.
-- **Step 3:** For all pairs `(i, j)` and route pairs `(k1, k2)`, set QUBO matrix entries:
-    - `Q[(q1, q2)] += w[i][j][k1][k2]` for off-diagonal terms.
-- **Step 4:** For each vehicle, add assignment constraint terms:
-    - `Q[(q, q)] += λ · (1 - 2)` for linear terms.
-    - `Q[(q1, q2)] += 2λ` for all pairs of routes for the same vehicle.
+The QUBO matrix construction follows these steps:
 
+- **Step 1:** **Vehicle Filtering and Indexing**
+  - Work with filtered vehicles from the cluster: `vehicle_ids_filtered`
+  - Create mappings: `vehicle_id_to_idx` and `route_id_to_idx`
+  - Initialize QUBO matrix `Q` as `defaultdict(float)`
+
+- **Step 2:** **Congestion Weight Computation**
+  - Call `congestion_weights()` to compute 4D weights `w[i][j][k1][k2]`
+  - Extract duration penalties from `duration_penalty_df` for each vehicle-route pair
+
+- **Step 3:** **Objective Function Terms**
+  - For all vehicle pairs `(i, j)` where `i < j` (upper triangular):
+    - For all route pairs `(k1, k2)`:
+      - Compute flattened indices: `q1 = i * route_alternatives + k1`, `q2 = j * route_alternatives + k2`
+      - Add congestion: `Q[(q1, q2)] += congestion_w[i][j][k1][k2]`
+
+- **Step 4:** **Dynamic Penalty Calculation**
+  - For each variable `q`, compute dynamic penalty based on row/column sums in QUBO
+  - Calculate `lambda_penalty = max(dynamic_penalties)` to ensure constraint dominance
+
+- **Step 5:** **One-Hot Constraint Enforcement** (if `comp_type != "hybrid_cqm"`):
+  - **Diagonal terms**: `Q[(q, q)] += -lambda_penalty + penalties[q]` 
+  - **Off-diagonal terms**: For same vehicle different routes: `Q[(q1, q2)] += lambda_penalty`
+  - This implements the penalty: `λ * (Σ x_i^k - 1)²`
+
+**Key Implementation Details:**
+- Handles invalid routes by penalizing them heavily
+- Dynamic penalty ensures constraints are stronger than objective terms
+- For CQM mode, constraints are handled separately (no penalty terms added to QUBO)
 ---
 
 ## 8. Complexity Analysis
@@ -338,51 +384,6 @@ The system implements an intelligent clustering approach to make QUBO optimizati
 - **Flexibility**: Supports different minimum cluster sizes and resolution parameters
 
 ---
-
-# Clustering and Filtering
-          # Vehicle clustering logic (Leiden algorithm)
-                # Process clusters (QA + Gurobi)
-           # Process clusters (all solvers)
-  
-  # QUBO Construction
-                     # QUBO matrix construction per cluster
-  congestion_weights.py            # Congestion weight calculations
-  
-  # Solvers
-                      # Quantum Annealing (D-Wave)
-                      # Simulated Annealing
-                    # Tabu Search
-                  # Gurobi optimization
-                     # CBC solver
-  
-  # Other modules
-                          # Database models
-  generate_*.py                    # Vehicle and route generation
-  ...                              # Other utility modules
-files_csv/                         # QUBO matrices output
-files_html/                        # Visualization heatmaps
-
----
-
-## Configuration
-
-Key parameters in `src/modules/config.py`:
-
-```python
-# Clustering Parameters
-CLUSTER_RESOLUTION = 4.0          # Leiden algorithm resolution
-MIN_CLUSTER_SIZE = 100            # Minimum vehicles per cluster
-MAX_CLUSTERS = None               # Limit number of clusters (None = all)
-
-# Solver Selection
-COMP_TYPE = "hybrid"              # QA solver type
-FULL = False                      # True = run all solvers, False = QA + Gurobi only
-
-# Vehicle Generation
-N_VEHICLES = 18000                # Total vehicles to simulate
-K_ALTERNATIVES = 3                # Routes per vehicle
-```
-
 
 
 [definitionLink]: https://arxiv.org/pdf/2510.06053
