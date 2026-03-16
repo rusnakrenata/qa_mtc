@@ -34,7 +34,9 @@ python src/modules/main.py
 ```
 
 - Configuration parameters (city, number of vehicles, etc.) are in `src/modules/config.py`.
-- Outputs (QUBO matrix, heatmaps) are saved in `src/modules/files/`.
+- Outputs are saved in (because of size limits in .gitignore - could be added):
+   - `src/modules/files_csv/` (QUBO matrices and CSV results)
+   - `src/modules/files_html/` (interactive congestion heatmaps)
 
 ---
 
@@ -44,9 +46,9 @@ Key parameters in `src/modules/config.py`:
 
 ```python
 # --- Simulation/City Parameters ---
-CITY_NAME = "Barcelona, Spain"
-CENTER_COORDS = (41.392937, 2.145062)  # Barcelona coordinates
-RADIUS_KM = 3.2                         # City radius for simulation
+CITY_NAME = "Kosice, Slovakia"
+CENTER_COORDS = (48.7208, 21.2575)
+RADIUS_KM = 3.0                         # City radius for simulation
 N_VEHICLES = 10000                      # Total vehicles to simulate
 K_ALTERNATIVES = 3                      # Routes per vehicle
 MIN_LENGTH = 500                        # Minimum route length (meters)
@@ -69,6 +71,8 @@ FULL = False                            # True = run all solvers, False = QA + G
 ATTRACTION_POINT = None                 # (lat, lon) tuple for attraction-based vehicle generation
 D_ALTERNATIVES = None                   # Number of attraction alternatives
 ```
+
+> Note: These are current defaults in `config.py`. Change them per experiment.
 
 ---
 
@@ -119,15 +123,22 @@ D_ALTERNATIVES = None                   # Number of attraction alternatives
 qa_mtc/
   README.md
   requirements.txt
+   LICENSE
+   gurobi.lic
   src/
+      bib/                    # Research notebooks
     modules/
       main.py                # Main workflow script
       config.py              # Configuration parameters
       filter_routes_for_qubo.py # Vehicle filtering logic
       qubo_matrix.py         # QUBO construction
+         files_csv/             # CSV outputs
+         files_html/            # HTML visualizations
+         qubo_matrices/         # Stored matrix artifacts
+         output/                # Generated outputs
+         cache/                 # Cached route/API data
       ...                    # Other modules (see code)
-    files/                   # Output files (QUBO, heatmaps, etc.)
-  tests/                     # Unit tests (recommended)
+   sql/                       # Analysis queries
 ```
 
 ---
