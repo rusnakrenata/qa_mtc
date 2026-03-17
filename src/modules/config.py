@@ -4,8 +4,8 @@
 #CITY_NAME = "Bratislava, Slovakia"
 #CENTER_COORDS = None#(48.7208, 21.2575)
 #RADIUS_KM = None
-CITY_NAME = "Barcelona, Spain"
-CENTER_COORDS = (41.392937, 2.145062)#(41.384500, 2.129500) # Barcelona
+CITY_NAME = "Kosice, Slovakia"
+CENTER_COORDS = (48.7208, 21.2575)#(41.392937, 2.145062) # Barcelona
 RADIUS_KM = 3.2
 N_VEHICLES = 10000
 K_ALTERNATIVES = 3

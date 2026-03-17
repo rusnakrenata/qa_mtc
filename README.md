@@ -1,11 +1,19 @@
-# Quantum-Inspired Traffic Optimization: A Scalable and Dynamic Approach for Congestion Minimization in Urban Environments
+# Quantum Annealing for Realistic Traffic Flow Optimization: Clustering and Data-Driven QUBO
 [[PAPER]](https://arxiv.org/pdf/2510.06053)
 
 ---
 
 ## Project Overview
 
-This project simulates and optimizes urban vehicle routing to minimize congestion using a Quadratic Unconstrained Binary Optimization (QUBO) approach. It integrates real-world city data, simulates thousands of vehicles, computes congestion, and formulates a QUBO problem for quantum or classical solvers. The workflow includes data extraction, simulation, congestion analysis, optimization, and visualization.
+This project implements the Traffic Flow Optimization (TFO) framework, which formulates the vehicle-to-route assignment problem as a Quadratic Unconstrained Binary Optimization (QUBO) model.
+The objective is to assign exactly one route to each vehicle such that overall traffic congestion is minimized while avoiding inefficient route choices.
+
+The system integrates:
+- real-world routing (Valhalla + OpenStreetMap)
+- spatiotemporal congestion modeling
+- hybrid quantum–classical optimization
+
+Scalability is achieved through Leiden clustering and problem decomposition, rather than solving a single global QUBO instance.
 
 ---
 
@@ -34,7 +42,45 @@ python src/modules/main.py
 ```
 
 - Configuration parameters (city, number of vehicles, etc.) are in `src/modules/config.py`.
-- Outputs (QUBO matrix, heatmaps) are saved in `src/modules/files/`.
+- Outputs are saved in (because of size limits in .gitignore - could be added):
+   - `src/modules/files_csv/` (QUBO matrices and CSV results)
+   - `src/modules/files_html/` (interactive congestion heatmaps)
+
+---
+
+## Configuration
+
+Key parameters in `src/modules/config.py`:
+
+```python
+# --- Simulation/City Parameters ---
+CITY_NAME = "Kosice, Slovakia"
+CENTER_COORDS = (48.7208, 21.2575)
+RADIUS_KM = 3.0                         # City radius for simulation
+N_VEHICLES = 10000                      # Total vehicles to simulate
+K_ALTERNATIVES = 3                      # Routes per vehicle
+MIN_LENGTH = 500                        # Minimum route length (meters)
+MAX_LENGTH = 4000                       # Maximum route length (meters)
+TIME_STEP = 10                          # Time step for congestion calculation
+TIME_WINDOW = 300                       # Time window for congestion calculation
+DISTANCE_FACTOR = 4.0                   # Factor to adjust distance in congestion calculations
+
+# --- Clustering Parameters ---
+CLUSTER_RESOLUTION = 4.0                # Leiden algorithm resolution parameter
+MIN_CLUSTER_SIZE = 500                  # Minimum vehicles per cluster
+MAX_CLUSTERS = 200                      # Maximum number of clusters to process
+
+# --- QUBO/QA Parameters ---
+COMP_TYPE = "hybrid"                    # QA solver type: 'sa', 'hybrid', 'hybrid_cqm', 'qpu'
+ROUTE_METHOD = "duration"               # Route optimization method: "duration" or "distance"
+FULL = False                            # True = run all solvers, False = QA + Gurobi only
+
+# --- Optional Attraction Point ---
+ATTRACTION_POINT = None                 # (lat, lon) tuple for attraction-based vehicle generation
+D_ALTERNATIVES = None                   # Number of attraction alternatives
+```
+
+> Note: These are current defaults in `config.py`. Change them per experiment.
 
 ---
 
@@ -57,7 +103,7 @@ python src/modules/main.py
    - Processes clusters in parallel, making the optimization scalable for large vehicle fleets.
 7. **Multi-Solver Optimization:**
    - Solves each cluster's QUBO using multiple approaches:
-     - **Quantum Annealing**: D-Wave quantum computers (hybrid, CQM, QPU modes)
+     - **Quantum Annealing**: D-Wave quantum computers (hybrid BQM, CQM, QPU modes)
      - **Classical Solvers**: Simulated Annealing, Tabu Search, Gurobi, CBC
    - Compares performance across different solution methods.
 8. **Assignment Extraction:**
@@ -72,9 +118,15 @@ python src/modules/main.py
 
 **Workflow Diagram (textual):**
 ```
-[City Graph] → [Vehicles] → [Routes] → [Congestion] → [QUBO Matrix]
-      ↓                                         ↑
-[Filtering] → [QUBO/QA Optimization] → [Assignment] → [Post-QA Congestion] → [Visualization]
+[City Graph] → [Vehicles] → [Routes] → [Congestion Graph]
+                                    ↓
+                             [Leiden Clustering]
+                                    ↓
+                        [Clustered QUBO Problems]
+                                    ↓
+                    [Hybrid Optimization (QA + Classical)]
+                                    ↓
+                        [Assignment + Evaluation]
 ```
 
 ---
@@ -85,37 +137,33 @@ python src/modules/main.py
 qa_mtc/
   README.md
   requirements.txt
+  LICENSE
   src/
-    modules/
-      main.py                # Main workflow script
-      config.py              # Configuration parameters
+      bib/                       # Research notebooks
+      modules/
+      main.py                   # Main workflow script
+      config.py                 # Configuration parameters
       filter_routes_for_qubo.py # Vehicle filtering logic
-      qubo_matrix.py         # QUBO construction
-      ...                    # Other modules (see code)
-    files/                   # Output files (QUBO, heatmaps, etc.)
-  tests/                     # Unit tests (recommended)
+      qubo_matrix.py            # QUBO construction
+         files_csv/             # CSV outputs
+         files_html/            # HTML visualizations
+         qubo_matrices/         # Stored matrix artifacts
+         output/                # Generated outputs
+         cache/                 # Cached route/API data
+      ...                       # Other modules (see code)
+      sql/                      # Analysis queries
 ```
 
 ---
 
-## Testing
-
-- Unit tests are (or will be) located in the `tests/` directory.
-- To run all tests:
-  ```bash
-  pytest tests/
-  ```
-- Tests cover core logic: filtering, QUBO construction, congestion calculation, etc.
-
----
 
 ## Multi-Solver Approach
 
 The system supports multiple optimization approaches for solving QUBO problems:
 
 ### Quantum Annealing (D-Wave)
-- **Hybrid**: `LeapHybridSampler` for larger problems
-- **CQM**: `LeapHybridCQMSampler` with explicit constraints
+- **Hybrid BQM**: `LeapHybridBQMSampler` for larger problems
+- **Hyrid CQM**: `LeapHybridCQMSampler` with explicit constraints
 - **QPU**: Direct quantum processing unit access
 
 ### Classical Solvers
@@ -136,7 +184,7 @@ The system supports multiple optimization approaches for solving QUBO problems:
 
 ## 1. Introduction
 
-Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
+Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route also with respect to the shortest (duration) alternative. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
 
 ---
 
@@ -163,9 +211,15 @@ We also define a congestion cost `w[i][j][k1][k2]`, representing the penalty if 
 
 The total congestion cost is modeled as a quadratic function over the binary variables:
 
-    f(x) = ∑_{i=0}^{n-1} ∑_{j=0}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2}
+    f(x) = ∑_{i<j}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2} + ∑_{i=0}^{n-1} ∑_{k=0}^{t-1} π[i,k] · x_i^{k}
+    
+Where:
+- w[i][j][k1][k2] = congestion cost between vehicles
+- π[i,k] = route duration penalty
 
-This function penalizes combinations of vehicles assigned to congested route pairs, encouraging distribution across less crowded paths.
+This objective balances:
+- minimizing congestion
+- avoiding unnecessarily long routes
 
 ---
 
@@ -175,7 +229,7 @@ To enforce that each vehicle is assigned exactly one route, we use a penalty fun
 
     P(x) = λ · ∑_{i=0}^{n-1} ( ∑_{k=0}^{t-1} x_i^k - 1 )²
 
-Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion.
+Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion caluclated using Verma-Lewis row-sum principle.
 
 ---
 
@@ -204,14 +258,36 @@ The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
 
 ## 7. Algorithm: QUBO Matrix Construction
 
-- **Step 1:** Filter vehicles for QUBO (e.g., by congestion impact).
-- **Step 2:** Compute or normalize congestion weights `w[i][j][k1][k2]` for the filtered set.
-- **Step 3:** For all pairs `(i, j)` and route pairs `(k1, k2)`, set QUBO matrix entries:
-    - `Q[(q1, q2)] += w[i][j][k1][k2]` for off-diagonal terms.
-- **Step 4:** For each vehicle, add assignment constraint terms:
-    - `Q[(q, q)] += λ · (1 - 2)` for linear terms.
-    - `Q[(q1, q2)] += 2λ` for all pairs of routes for the same vehicle.
+The QUBO matrix construction follows these steps:
 
+- **Step 1:** **Vehicle Filtering and Indexing**
+  - Work with filtered vehicles from the cluster: `vehicle_ids_filtered`
+  - Create mappings: `vehicle_id_to_idx` and `route_id_to_idx`
+  - Initialize QUBO matrix `Q` as `defaultdict(float)`
+
+- **Step 2:** **Congestion Weight Computation**
+  - Call `congestion_weights()` to compute 4D weights `w[i][j][k1][k2]`
+  - Extract duration penalties from `duration_penalty_df` for each vehicle-route pair
+
+- **Step 3:** **Objective Function Terms**
+  - For all vehicle pairs `(i, j)` where `i < j` (upper triangular):
+    - For all route pairs `(k1, k2)`:
+      - Compute flattened indices: `q1 = i * route_alternatives + k1`, `q2 = j * route_alternatives + k2`
+      - Add congestion: `Q[(q1, q2)] += congestion_w[i][j][k1][k2]`
+
+- **Step 4:** **Dynamic Penalty Calculation**
+  - For each variable `q`, compute dynamic penalty based on row/column sums in QUBO
+  - Calculate `lambda_penalty = max(dynamic_penalties)` to ensure constraint dominance
+
+- **Step 5:** **One-Hot Constraint Enforcement** (if `comp_type != "hybrid_cqm"`):
+  - **Diagonal terms**: `Q[(q, q)] += -lambda_penalty + penalties[q]` 
+  - **Off-diagonal terms**: For same vehicle different routes: `Q[(q1, q2)] += lambda_penalty`
+  - This implements the penalty: `λ * (Σ x_i^k - 1)²`
+
+**Key Implementation Details:**
+- Handles invalid routes by penalizing them heavily
+- Dynamic penalty ensures constraints are stronger than objective terms
+- For CQM mode, constraints are handled separately (no penalty terms added to QUBO)
 ---
 
 ## 8. Complexity Analysis
@@ -252,19 +328,10 @@ bqm = BinaryQuadraticModel.from_qubo(Q)
 
 ## 10. Novelty and Contribution
 
-Existing systems such as Google Maps and Waze perform real-time routing based on individual travel time optimization. While effective for user-level navigation, these systems do not coordinate across multiple vehicles, which can lead to **unintended congestion** as many users are directed to the same route.
-
-Classical transportation planning tools (e.g., VISUM, TransCAD) optimize traffic assignments using equilibrium models but are primarily designed for **long-term forecasting** rather than **real-time, dynamic allocation**.
-
-In contrast, our approach formulates the **vehicle-to-route assignment problem** as a **Quadratic Unconstrained Binary Optimization (QUBO)** problem. The key novelties of our method include:
-
 - **Coordinated vehicle routing** using a global objective function
 - **Congestion-aware modeling** via pairwise weights `w[i][j][k1][k2]` that penalize vehicles assigned to congested route pairs
 - **Constraint enforcement** through penalty terms that guarantee each vehicle is assigned exactly one route
 - Compatibility with **quantum annealing hardware** (e.g., D-Wave), allowing execution on specialized solvers for combinatorial optimization
-- Applicability to **multi-agent systems**, autonomous vehicle coordination, and real-time traffic distribution
-
-This formulation bridges the gap between high-level traffic assignment models and real-time routing needs, offering a scalable, intelligent traffic control mechanism that is both rigorous and deployable.
 
 ## Database Schema & ORM Usage
 
@@ -338,51 +405,6 @@ The system implements an intelligent clustering approach to make QUBO optimizati
 - **Flexibility**: Supports different minimum cluster sizes and resolution parameters
 
 ---
-
-# Clustering and Filtering
-          # Vehicle clustering logic (Leiden algorithm)
-                # Process clusters (QA + Gurobi)
-           # Process clusters (all solvers)
-  
-  # QUBO Construction
-                     # QUBO matrix construction per cluster
-  congestion_weights.py            # Congestion weight calculations
-  
-  # Solvers
-                      # Quantum Annealing (D-Wave)
-                      # Simulated Annealing
-                    # Tabu Search
-                  # Gurobi optimization
-                     # CBC solver
-  
-  # Other modules
-                          # Database models
-  generate_*.py                    # Vehicle and route generation
-  ...                              # Other utility modules
-files_csv/                         # QUBO matrices output
-files_html/                        # Visualization heatmaps
-
----
-
-## Configuration
-
-Key parameters in `src/modules/config.py`:
-
-```python
-# Clustering Parameters
-CLUSTER_RESOLUTION = 4.0          # Leiden algorithm resolution
-MIN_CLUSTER_SIZE = 100            # Minimum vehicles per cluster
-MAX_CLUSTERS = None               # Limit number of clusters (None = all)
-
-# Solver Selection
-COMP_TYPE = "hybrid"              # QA solver type
-FULL = False                      # True = run all solvers, False = QA + Gurobi only
-
-# Vehicle Generation
-N_VEHICLES = 18000                # Total vehicles to simulate
-K_ALTERNATIVES = 3                # Routes per vehicle
-```
-
 
 
 [definitionLink]: https://arxiv.org/pdf/2510.06053
