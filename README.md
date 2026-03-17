@@ -30,8 +30,34 @@ Scalability is achieved through Leiden clustering and problem decomposition, rat
    pip install -r requirements.txt
    ```
 3. **Set up database:**
-   - Ensure you have a MariaDB/MySQL instance running.
-   - Update connection settings in the code or via environment variables if needed.
+   - Ensure you have a MariaDB instance running (https://mariadb.org/download/).
+   - Update connection settings in the code or via environment variables if needed (setup in src/modules/db_config.py).
+   - Tables are created via SQLAlchemy Base.metadata.create_all(engine) in src/modules/models.py when the models are imported
+4. **Valhalla engine**
+   - Download Valhalla via docker https://hub.docker.com/r/valhalla/valhalla and run it
+   - Download and build map tiles (https://www.interline.io/valhalla/tilepacks/)
+   - Start the Valhalla service and ensure it is accessible  (Valhalla HTTP endpoint is set in /src/modules/utils.py)
+
+
+## Solver licenses & credentials (Gurobi / D-Wave)
+
+Some solvers used in this project require a commercial license or cloud credentials:
+
+### Gurobi (commercial)
+This project can use **Gurobi** via the `gurobipy` Python package.
+
+- You must have a valid Gurobi license to run Gurobi-based optimization.
+- Set up your local license (e.g., `grbgetkey`) or configure a license server according to Gurobi’s documentation.
+
+
+### D-Wave (cloud / Leap account)
+This project can use **D-Wave Ocean** (`dwave_system`) for hybrid solvers / quantum annealing.
+
+- You need a D-Wave Leap account and an API token.
+- Configure credentials using Ocean’s standard configuration (recommended), e.g. via the `dwave` CLI, or set the environment variable:
+  - `DWAVE_API_TOKEN=<your_token>`
+
+  
 
 ---
 
@@ -158,19 +184,19 @@ qa_mtc/
   requirements.txt
   LICENSE
   src/
-      bib/                       # Research notebooks
+      bib/                          # Research notebooks
       modules/
-      main.py                   # Main workflow script
-      config.py                 # Configuration parameters
-      filter_routes_for_qubo.py # Vehicle filtering logic
-      qubo_matrix.py            # QUBO construction
-         files_csv/             # CSV outputs
-         files_html/            # HTML visualizations
-         qubo_matrices/         # Stored matrix artifacts
-         output/                # Generated outputs
-         cache/                 # Cached route/API data
-      ...                       # Other modules (see code)
-      sql/                      # Analysis queries
+         main.py                   # Main workflow script
+         config.py                 # Configuration parameters
+         filter_routes_for_qubo.py # Vehicle filtering logic
+         qubo_matrix.py            # QUBO construction
+         files_csv/                # CSV outputs
+         files_html/               # HTML visualizations
+         qubo_matrices/            # Stored matrix artifacts
+         output/                   # Generated outputs
+         cache/                    # Cached route/API data
+         ...                       # Other modules (see code)
+      sql/                         # Analysis queries
 ```
 
 ---
