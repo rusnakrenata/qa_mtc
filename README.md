@@ -13,6 +13,7 @@ The system integrates:
 - spatiotemporal congestion modeling
 - hybrid quantum–classical optimization
 
+The project is written in Python and is using MariaDB database as a data storage.
 Scalability is achieved through Leiden clustering and problem decomposition, rather than solving a single global QUBO instance.
 
 ---
@@ -116,17 +117,35 @@ D_ALTERNATIVES = None                   # Number of attraction alternatives
     - Generates interactive heatmaps of congestion for different routing strategies.
     - Visualizes cluster distributions and optimization results.
 
-**Workflow Diagram (textual):**
-```
-[City Graph] → [Vehicles] → [Routes] → [Congestion Graph]
-                                    ↓
-                             [Leiden Clustering]
-                                    ↓
-                        [Clustered QUBO Problems]
-                                    ↓
-                    [Hybrid Optimization (QA + Classical)]
-                                    ↓
-                        [Assignment + Evaluation]
+## Workflow Diagram
+
+```mermaid
+graph TD
+    A[Start Workflow] --> B[Get or Create City]
+    B --> C[Get City Data]
+    C --> D[Get or Create RunConfig]
+    D --> E[Create Iteration]
+    E --> F[Generate Vehicles]
+    F --> G[Generate Vehicle Routes]
+    G --> H[Compute Congestion]
+    H --> I[Get Congestion Weights]
+    I --> J[Vehicle Clustering - Leiden Algorithm]
+    J --> K[Process Each Cluster]
+    K --> L[Build QUBO Matrix per Cluster]
+    L --> M[Multi-Solver Optimization]
+    M --> N[Quantum Annealing]
+    M --> O[Simulated Annealing]
+    M --> P[Tabu Search]
+    M --> Q[Gurobi]
+    M --> R[CBC]
+    N --> S[Aggregate Results]
+    O --> S
+    P --> S
+    Q --> S
+    R --> S
+    S --> T[Post-Optimization Analysis]
+    T --> U[Visualize Results]
+    U --> V[End]
 ```
 
 ---
@@ -326,13 +345,6 @@ bqm = BinaryQuadraticModel.from_qubo(Q)
 
 ---
 
-## 10. Novelty and Contribution
-
-- **Coordinated vehicle routing** using a global objective function
-- **Congestion-aware modeling** via pairwise weights `w[i][j][k1][k2]` that penalize vehicles assigned to congested route pairs
-- **Constraint enforcement** through penalty terms that guarantee each vehicle is assigned exactly one route
-- Compatibility with **quantum annealing hardware** (e.g., D-Wave), allowing execution on specialized solvers for combinatorial optimization
-
 ## Database Schema & ORM Usage
 
 The system uses SQLAlchemy ORM models for all database tables. The schema includes:
@@ -354,36 +366,7 @@ with get_session() as session:
     ...
 ```
 
-## Workflow Diagram
 
-```mermaid
-graph TD
-    A[Start Workflow] --> B[Get or Create City]
-    B --> C[Get City Data]
-    C --> D[Get or Create RunConfig]
-    D --> E[Create Iteration]
-    E --> F[Generate Vehicles]
-    F --> G[Generate Vehicle Routes]
-    G --> H[Compute Congestion]
-    H --> I[Get Congestion Weights]
-    I --> J[Vehicle Clustering - Leiden Algorithm]
-    J --> K[Process Each Cluster]
-    K --> L[Build QUBO Matrix per Cluster]
-    L --> M[Multi-Solver Optimization]
-    M --> N[Quantum Annealing]
-    M --> O[Simulated Annealing]
-    M --> P[Tabu Search]
-    M --> Q[Gurobi]
-    M --> R[CBC]
-    N --> S[Aggregate Results]
-    O --> S
-    P --> S
-    Q --> S
-    R --> S
-    S --> T[Post-Optimization Analysis]
-    T --> U[Visualize Results]
-    U --> V[End]
-```
 
 ## Vehicle Clustering Algorithm
 
