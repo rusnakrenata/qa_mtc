@@ -1,11 +1,19 @@
-# Quantum-Inspired Traffic Optimization: A Scalable and Dynamic Approach for Congestion Minimization in Urban Environments
+# Quantum Annealing for Realistic Traffic Flow Optimization: Clustering and Data-Driven QUBO
 [[PAPER]](https://arxiv.org/pdf/2510.06053)
 
 ---
 
 ## Project Overview
 
-This project simulates and optimizes urban vehicle routing to minimize congestion using a Quadratic Unconstrained Binary Optimization (QUBO) approach. It integrates real-world city data, simulates thousands of vehicles, computes congestion, and formulates a QUBO problem for quantum or classical solvers. The workflow includes data extraction, simulation, congestion analysis, optimization, and visualization.
+This project implements the Traffic Flow Optimization (TFO) framework, which formulates the vehicle-to-route assignment problem as a Quadratic Unconstrained Binary Optimization (QUBO) model.
+The objective is to assign exactly one route to each vehicle such that overall traffic congestion is minimized while avoiding inefficient route choices.
+
+The system integrates:
+- real-world routing (Valhalla + OpenStreetMap)
+- spatiotemporal congestion modeling
+- hybrid quantum–classical optimization
+
+Scalability is achieved through Leiden clustering and problem decomposition, rather than solving a single global QUBO instance.
 
 ---
 
@@ -110,9 +118,15 @@ D_ALTERNATIVES = None                   # Number of attraction alternatives
 
 **Workflow Diagram (textual):**
 ```
-[City Graph] → [Vehicles] → [Routes] → [Congestion] → [QUBO Matrix]
-      ↓                                         ↑
-[Filtering] → [QUBO/QA Optimization] → [Assignment] → [Post-QA Congestion] → [Visualization]
+[City Graph] → [Vehicles] → [Routes] → [Congestion Graph]
+                                    ↓
+                             [Leiden Clustering]
+                                    ↓
+                        [Clustered QUBO Problems]
+                                    ↓
+                    [Hybrid Optimization (QA + Classical)]
+                                    ↓
+                        [Assignment + Evaluation]
 ```
 
 ---
@@ -123,22 +137,21 @@ D_ALTERNATIVES = None                   # Number of attraction alternatives
 qa_mtc/
   README.md
   requirements.txt
-   LICENSE
-   gurobi.lic
+  LICENSE
   src/
-      bib/                    # Research notebooks
-    modules/
-      main.py                # Main workflow script
-      config.py              # Configuration parameters
+      bib/                       # Research notebooks
+      modules/
+      main.py                   # Main workflow script
+      config.py                 # Configuration parameters
       filter_routes_for_qubo.py # Vehicle filtering logic
-      qubo_matrix.py         # QUBO construction
+      qubo_matrix.py            # QUBO construction
          files_csv/             # CSV outputs
          files_html/            # HTML visualizations
          qubo_matrices/         # Stored matrix artifacts
          output/                # Generated outputs
          cache/                 # Cached route/API data
-      ...                    # Other modules (see code)
-   sql/                       # Analysis queries
+      ...                       # Other modules (see code)
+      sql/                      # Analysis queries
 ```
 
 ---
@@ -171,7 +184,7 @@ The system supports multiple optimization approaches for solving QUBO problems:
 
 ## 1. Introduction
 
-Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
+Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route also with respect to the shortest (duration) alternative. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
 
 ---
 
@@ -198,9 +211,15 @@ We also define a congestion cost `w[i][j][k1][k2]`, representing the penalty if 
 
 The total congestion cost is modeled as a quadratic function over the binary variables:
 
-    f(x) = ∑_{i=0}^{n-1} ∑_{j=0}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2}
+    f(x) = ∑_{i<j}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2} + ∑_{i=0}^{n-1} ∑_{k=0}^{t-1} π[i,k] · x_i^{k}
+    
+Where:
+- w[i][j][k1][k2] = congestion cost between vehicles
+- π[i,k] = route duration penalty
 
-This function penalizes combinations of vehicles assigned to congested route pairs, encouraging distribution across less crowded paths.
+This objective balances:
+- minimizing congestion
+- avoiding unnecessarily long routes
 
 ---
 
@@ -210,7 +229,7 @@ To enforce that each vehicle is assigned exactly one route, we use a penalty fun
 
     P(x) = λ · ∑_{i=0}^{n-1} ( ∑_{k=0}^{t-1} x_i^k - 1 )²
 
-Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion.
+Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion caluclated using Verma-Lewis row-sum principle.
 
 ---
 
@@ -309,19 +328,10 @@ bqm = BinaryQuadraticModel.from_qubo(Q)
 
 ## 10. Novelty and Contribution
 
-Existing systems such as Google Maps and Waze perform real-time routing based on individual travel time optimization. While effective for user-level navigation, these systems do not coordinate across multiple vehicles, which can lead to **unintended congestion** as many users are directed to the same route.
-
-Classical transportation planning tools (e.g., VISUM, TransCAD) optimize traffic assignments using equilibrium models but are primarily designed for **long-term forecasting** rather than **real-time, dynamic allocation**.
-
-In contrast, our approach formulates the **vehicle-to-route assignment problem** as a **Quadratic Unconstrained Binary Optimization (QUBO)** problem. The key novelties of our method include:
-
 - **Coordinated vehicle routing** using a global objective function
 - **Congestion-aware modeling** via pairwise weights `w[i][j][k1][k2]` that penalize vehicles assigned to congested route pairs
 - **Constraint enforcement** through penalty terms that guarantee each vehicle is assigned exactly one route
 - Compatibility with **quantum annealing hardware** (e.g., D-Wave), allowing execution on specialized solvers for combinatorial optimization
-- Applicability to **multi-agent systems**, autonomous vehicle coordination, and real-time traffic distribution
-
-This formulation bridges the gap between high-level traffic assignment models and real-time routing needs, offering a scalable, intelligent traffic control mechanism that is both rigorous and deployable.
 
 ## Database Schema & ORM Usage
 
