@@ -13,7 +13,7 @@ The system integrates:
 - spatiotemporal congestion modeling
 - hybrid quantum–classical optimization
 
-The project is written in Python and is using MariaDB database as a data storage.
+The project is written in Python and uses a MariaDB database for data storage.
 Scalability is achieved through Leiden clustering and problem decomposition, rather than solving a single global QUBO instance.
 
 ---
@@ -31,33 +31,28 @@ Scalability is achieved through Leiden clustering and problem decomposition, rat
    ```
 3. **Set up database:**
    - Ensure you have a MariaDB instance running (https://mariadb.org/download/).
-   - Update connection settings in the code or via environment variables if needed (setup in src/modules/db_config.py).
-   - Tables are created via SQLAlchemy Base.metadata.create_all(engine) in src/modules/models.py when the models are imported
-4. **Valhalla engine**
-   - Download Valhalla via docker https://hub.docker.com/r/valhalla/valhalla and run it
-   - Download and build map tiles (https://www.interline.io/valhalla/tilepacks/)
-   - Start the Valhalla service and ensure it is accessible  (Valhalla HTTP endpoint is set in /src/modules/utils.py)
-
+   - Update connection settings via environment variables or directly in `src/modules/db_config.py`:
+     - `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`
+   - Tables are created automatically via `Base.metadata.create_all(engine)` in `src/modules/models.py` when the models are imported.
+4. **Valhalla routing engine:**
+   - Download Valhalla via Docker: https://hub.docker.com/r/valhalla/valhalla
+   - Download and build map tiles: https://www.interline.io/valhalla/tilepacks/
+   - Start the Valhalla service and ensure it is accessible. The HTTP endpoint is configured in `src/modules/utils.py`.
 
 ## Solver licenses & credentials (Gurobi / D-Wave)
 
-Some solvers used in this project require a commercial license or cloud credentials:
+Some solvers require a commercial license or cloud credentials:
 
 ### Gurobi (commercial)
-This project can use **Gurobi** via the `gurobipy` Python package.
-
 - You must have a valid Gurobi license to run Gurobi-based optimization.
-- Set up your local license (e.g., `grbgetkey`) or configure a license server according to Gurobi’s documentation.
-
+- Set up your local license (e.g., `grbgetkey`) or configure a license server per Gurobi's documentation.
 
 ### D-Wave (cloud / Leap account)
-This project can use **D-Wave Ocean** (`dwave_system`) for hybrid solvers / quantum annealing.
-
 - You need a D-Wave Leap account and an API token.
-- Configure credentials using Ocean’s standard configuration (recommended), e.g. via the `dwave` CLI, or set the environment variable:
-  - `DWAVE_API_TOKEN=<your_token>`
-
-  
+- Configure credentials via the `dwave` CLI or set the environment variable:
+  ```
+  DWAVE_API_TOKEN=<your_token>
+  ```
 
 ---
 
@@ -69,9 +64,9 @@ python src/modules/main.py
 ```
 
 - Configuration parameters (city, number of vehicles, etc.) are in `src/modules/config.py`.
-- Outputs are saved in (because of size limits in .gitignore - could be added):
-   - `src/modules/files_csv/` (QUBO matrices and CSV results)
-   - `src/modules/files_html/` (interactive congestion heatmaps)
+- Outputs are saved to runtime-generated directories (excluded from the repository via `.gitignore`):
+  - `src/modules/files_csv/` — QUBO matrices and CSV results
+  - `src/modules/files_html/` — interactive congestion heatmaps
 
 ---
 
@@ -83,7 +78,7 @@ Key parameters in `src/modules/config.py`:
 # --- Simulation/City Parameters ---
 CITY_NAME = "Kosice, Slovakia"
 CENTER_COORDS = (48.7208, 21.2575)
-RADIUS_KM = 3.0                         # City radius for simulation
+RADIUS_KM = 3.2                         # City radius for simulation
 N_VEHICLES = 10000                      # Total vehicles to simulate
 K_ALTERNATIVES = 3                      # Routes per vehicle
 MIN_LENGTH = 500                        # Minimum route length (meters)
@@ -98,7 +93,7 @@ MIN_CLUSTER_SIZE = 500                  # Minimum vehicles per cluster
 MAX_CLUSTERS = 200                      # Maximum number of clusters to process
 
 # --- QUBO/QA Parameters ---
-COMP_TYPE = "hybrid"                    # QA solver type: 'sa', 'hybrid', 'hybrid_cqm', 'qpu'
+COMP_TYPE = "hybrid"                    # Solver type: 'sa', 'hybrid', 'hybrid_cqm', 'qpu'
 ROUTE_METHOD = "duration"               # Route optimization method: "duration" or "distance"
 FULL = False                            # True = run all solvers, False = QA + Gurobi only
 
@@ -107,43 +102,24 @@ ATTRACTION_POINT = None                 # (lat, lon) tuple for attraction-based 
 D_ALTERNATIVES = None                   # Number of attraction alternatives
 ```
 
-> Note: These are current defaults in `config.py`. Change them per experiment.
+> Note: These are the current defaults in `config.py`. Adjust per experiment.
 
 ---
 
 ## Workflow
 
-1. **City Graph Extraction:**
-   - Downloads or loads the city road network using OpenStreetMap and Valhalla APIs.
-2. **Vehicle Generation:**
-   - Simulates thousands of vehicles and generates alternative routes for each.
-3. **Route Generation (Valhalla):**
-   - Generates multiple alternative routes per vehicle using the Valhalla routing engine.
-4. **Congestion Calculation:**
-   - Computes pairwise congestion scores for all vehicle-route pairs based on spatiotemporal overlap.
-5. **Vehicle Clustering:**
-   - Groups vehicles by connectivity using the Leiden community detection algorithm.
-   - Creates clusters based on congestion interactions between vehicles.
-   - Ensures minimum cluster sizes by merging small clusters with neighbors.
-6. **QUBO Matrix Construction:**
-   - Builds a QUBO matrix for each cluster separately, encoding congestion and assignment constraints.
-   - Processes clusters in parallel, making the optimization scalable for large vehicle fleets.
-7. **Multi-Solver Optimization:**
-   - Solves each cluster's QUBO using multiple approaches:
-     - **Quantum Annealing**: D-Wave quantum computers (hybrid BQM, CQM, QPU modes)
-     - **Classical Solvers**: Simulated Annealing, Tabu Search, Gurobi, CBC
-   - Compares performance across different solution methods.
-8. **Assignment Extraction:**
-   - Extracts the optimal or near-optimal assignment from each solver's solution.
-   - Aggregates results across all clusters to form the complete vehicle assignment.
-9. **Post-Optimization Congestion Analysis:**
-   - Recomputes congestion based on the optimized assignments from different solvers.
-   - Compares congestion reduction achieved by each method.
-10. **Visualization:**
-    - Generates interactive heatmaps of congestion for different routing strategies.
-    - Visualizes cluster distributions and optimization results.
+1. **City Graph Extraction:** Downloads or loads the city road network using OpenStreetMap and Valhalla APIs.
+2. **Vehicle Generation:** Simulates vehicles with random or attraction-based origin/destination pairs.
+3. **Route Generation (Valhalla):** Generates `K_ALTERNATIVES` alternative routes per vehicle.
+4. **Congestion Calculation:** Computes pairwise congestion scores for all vehicle-route pairs based on spatiotemporal overlap.
+5. **Vehicle Clustering:** Groups vehicles into clusters using the Leiden community detection algorithm, based on congestion interactions. Small clusters are merged with high-connectivity neighbors to ensure minimum cluster sizes (controlled by `MIN_CLUSTER_SIZE` and `CLUSTER_RESOLUTION`).
+6. **QUBO Matrix Construction:** Builds a QUBO matrix for each cluster, encoding congestion costs and one-hot assignment constraints. Clusters are processed independently for scalability.
+7. **Multi-Solver Optimization:** Solves each cluster's QUBO using one or more solvers (see [Multi-Solver Approach](#multi-solver-approach)).
+8. **Assignment Extraction:** Aggregates per-cluster results into a complete vehicle-to-route assignment.
+9. **Post-Optimization Congestion Analysis:** Recomputes congestion under the optimized assignments and compares results across solvers.
+10. **Visualization:** Generates interactive HTML heatmaps of congestion for different routing strategies.
 
-## Workflow Diagram
+### Workflow Diagram
 
 ```mermaid
 graph TD
@@ -176,38 +152,13 @@ graph TD
 
 ---
 
-## Directory Structure
-
-```
-qa_mtc/
-  README.md
-  requirements.txt
-  LICENSE
-  src/
-      modules/
-         main.py                   # Main workflow script
-         config.py                 # Configuration parameters
-         filter_routes_for_qubo.py # Vehicle filtering logic
-         qubo_matrix.py            # QUBO construction
-         files_csv/                # CSV outputs
-         files_html/               # HTML visualizations
-         qubo_matrices/            # Stored matrix artifacts
-         output/                   # Generated outputs
-         cache/                    # Cached route/API data
-         ...                       # Other modules (see code)
-      sql/                         # Analysis queries
-```
-
----
-
-
 ## Multi-Solver Approach
 
 The system supports multiple optimization approaches for solving QUBO problems:
 
 ### Quantum Annealing (D-Wave)
-- **Hybrid BQM**: `LeapHybridBQMSampler` for larger problems
-- **Hyrid CQM**: `LeapHybridCQMSampler` with explicit constraints
+- **Hybrid BQM**: `LeapHybridSampler` for larger problems
+- **Hybrid CQM**: `LeapHybridCQMSampler` with explicit constraints
 - **QPU**: Direct quantum processing unit access
 
 ### Classical Solvers
@@ -216,149 +167,7 @@ The system supports multiple optimization approaches for solving QUBO problems:
 - **Gurobi**: Commercial MIP solver for exact solutions
 - **CBC**: Open-source linear programming solver
 
-### Performance Comparison
-- All solvers process the same QUBO formulation per cluster
-- Results are stored in separate database tables for analysis
-- Execution times, solution quality, and energy values are tracked
-- SQL queries in `sql/` directory provide comparative analysis
-
----
-
-## Mathematical Formulation
-
-## 1. Introduction
-
-Efficient traffic management is essential to minimizing congestion in modern transportation systems. In this study, we formulate a binary optimization problem to assign a set of cars to predefined routes, such that each car selects exactly one route, while minimizing overall congestion caused by multiple cars sharing the same route also with respect to the shortest (duration) alternative. We encode the problem in the form of a **Quadratic Unconstrained Binary Optimization (QUBO)** model, suitable for solving via quantum annealing or classical heuristics.
-
----
-
-## 2. Problem Definition
-
-We are given:
-
-- `n` vehicles, indexed `i = 0, ..., n - 1`
-- `t` routes (alternatives), indexed `k = 0, ..., t - 1`
-- Binary decision variables `x_i^k ∈ {0, 1}`, where:
-  - `x_i^k = 1` if vehicle `i` is assigned to route `k`
-  - `x_i^k = 0` otherwise
-
-**Assignment constraint:**  
-Each vehicle must be assigned to exactly one route:
-
-    ∑_{k=0}^{t-1} x_i^k = 1    for all i
-
-We also define a congestion cost `w[i][j][k1][k2]`, representing the penalty if vehicle `i` is assigned to route `k1` and vehicle `j` to route `k2`.
-
----
-
-## 3. Objective Function
-
-The total congestion cost is modeled as a quadratic function over the binary variables:
-
-    f(x) = ∑_{i<j}^{n-1} ∑_{k1=0}^{t-1} ∑_{k2=0}^{t-1} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2} + ∑_{i=0}^{n-1} ∑_{k=0}^{t-1} π[i,k] · x_i^{k}
-    
-Where:
-- w[i][j][k1][k2] = congestion cost between vehicles
-- π[i,k] = route duration penalty
-
-This objective balances:
-- minimizing congestion
-- avoiding unnecessarily long routes
-
----
-
-## 4. Constraint Enforcement via Penalty Term
-
-To enforce that each vehicle is assigned exactly one route, we use a penalty function:
-
-    P(x) = λ · ∑_{i=0}^{n-1} ( ∑_{k=0}^{t-1} x_i^k - 1 )²
-
-Here, `λ` is a penalty coefficient that balances constraint enforcement with the minimization of congestion caluclated using Verma-Lewis row-sum principle.
-
----
-
-## 5. Full QUBO Objective
-
-The total function to minimize becomes:
-
-    F(x) = f(x) + P(x)
-
-This is a fully quadratic, unconstrained objective suitable for QUBO solvers such as those provided by D-Wave.
-
----
-
-## 6. Variable Flattening and Index Mapping
-
-To express the problem in a QUBO matrix form, we flatten the `x_i^k` variables into a 1D binary vector `x_q` using:
-
-    q = i · t + k
-
-Each vehicle-route pair `(i, k)` is assigned a unique index `q ∈ {0, 1, ..., n·t - 1}`.  
-The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients.
-
----
-
-## 7. Algorithm: QUBO Matrix Construction
-
-The QUBO matrix construction follows these steps:
-
-- **Step 1:** **Vehicle Filtering and Indexing**
-  - Work with filtered vehicles from the cluster: `vehicle_ids_filtered`
-  - Create mappings: `vehicle_id_to_idx` and `route_id_to_idx`
-  - Initialize QUBO matrix `Q` as `defaultdict(float)`
-
-- **Step 2:** **Congestion Weight Computation**
-  - Call `congestion_weights()` to compute 4D weights `w[i][j][k1][k2]`
-  - Extract duration penalties from `duration_penalty_df` for each vehicle-route pair
-
-- **Step 3:** **Objective Function Terms**
-  - For all vehicle pairs `(i, j)` where `i < j` (upper triangular):
-    - For all route pairs `(k1, k2)`:
-      - Compute flattened indices: `q1 = i * route_alternatives + k1`, `q2 = j * route_alternatives + k2`
-      - Add congestion: `Q[(q1, q2)] += congestion_w[i][j][k1][k2]`
-
-- **Step 4:** **Dynamic Penalty Calculation**
-  - For each variable `q`, compute dynamic penalty based on row/column sums in QUBO
-  - Calculate `lambda_penalty = max(dynamic_penalties)` to ensure constraint dominance
-
-- **Step 5:** **One-Hot Constraint Enforcement** (if `comp_type != "hybrid_cqm"`):
-  - **Diagonal terms**: `Q[(q, q)] += -lambda_penalty + penalties[q]` 
-  - **Off-diagonal terms**: For same vehicle different routes: `Q[(q1, q2)] += lambda_penalty`
-  - This implements the penalty: `λ * (Σ x_i^k - 1)²`
-
-**Key Implementation Details:**
-- Handles invalid routes by penalizing them heavily
-- Dynamic penalty ensures constraints are stronger than objective terms
-- For CQM mode, constraints are handled separately (no penalty terms added to QUBO)
----
-
-## 8. Complexity Analysis
-
-### Without Clustering
-- **Number of variables:** `N = n · t` (all vehicles × routes)
-- **QUBO matrix size:** `O(N²)` in the dense case
-- **Problem size:** Exponential in number of vehicles
-
-### With Clustering
-- **Number of clusters:** `C` (typically `C << n`)
-- **Variables per cluster:** `N_c = n_c · t` (cluster vehicles × routes)
-- **Total complexity:** `O(∑(N_c²))` where `∑N_c = N`
-- **Parallel processing:** Clusters solved independently
-- **Scalability improvement:** Linear scaling with number of clusters
-
-### Benefits
-- **Memory efficiency:** Smaller QUBO matrices per cluster
-- **Solution quality:** Maintains optimization quality within high-interaction groups
-- **Computational speed:** Parallel cluster processing
-- **Hardware compatibility:** Fits within quantum annealer limits
-
----
-
-## 9. QUBO Output and Integration
-
-The resulting dictionary `Q[(q1, q2)]` constructed using the algorithm in Section 7 represents the full QUBO matrix. This output is compatible with quantum and hybrid solvers.
-
-For example, with **D-Wave's Ocean SDK**, you can directly load it as:
+All solvers process the same QUBO formulation per cluster. Results are stored in separate database tables for comparison. The QUBO dictionary `Q[(q1, q2)]` is compatible with D-Wave's Ocean SDK:
 
 ```python
 from dimod import BinaryQuadraticModel
@@ -366,51 +175,123 @@ from dimod import BinaryQuadraticModel
 bqm = BinaryQuadraticModel.from_qubo(Q)
 ```
 
+SQL queries in `src/sql/` provide comparative analysis across solvers.
+
 ---
 
-## Database Schema & ORM Usage
+## Mathematical Formulation
 
-The system uses SQLAlchemy ORM models for all database tables. The schema includes:
-- **City, Node, Edge:** Graph structure of the city
-- **RunConfig, Iteration:** Simulation configuration and runs
-- **Vehicle, VehicleRoute, RoutePoint:** Vehicles and their possible routes
-- **CongestionMap:** Pairwise congestion scores between vehicles/routes
-- **QAResult:** Results of QUBO/QA optimization
+For full details, see the [paper](https://arxiv.org/pdf/2510.06053). A brief summary follows.
+
+**Variables:** Binary `x_i^k ∈ {0, 1}` — vehicle `i` assigned to route `k`.
+
+**Assignment constraint:** Each vehicle must take exactly one route:
+
+    ∑_{k} x_i^k = 1    for all i
+
+**Objective:** Minimize total congestion plus a route-duration penalty:
+
+    f(x) = ∑_{i<j} ∑_{k1,k2} w[i][j][k1][k2] · x_i^{k1} · x_j^{k2}  +  ∑_{i,k} π[i,k] · x_i^k
+
+**Penalty term** (enforcing the one-hot constraint):
+
+    P(x) = λ · ∑_{i} ( ∑_{k} x_i^k - 1 )²
+
+where `λ` is calculated using the Verma-Lewis row-sum principle to ensure constraint dominance.
+
+**Full QUBO objective:**
+
+    F(x) = f(x) + P(x)
+
+Variables are flattened via `q = i · t + k` into a 1D vector, forming a QUBO matrix `Q ∈ ℝ^{nt × nt}`. For `hybrid_cqm` mode, the constraint is passed explicitly rather than via penalty terms.
+
+---
+
+## Database Schema
+
+The system uses SQLAlchemy ORM. Tables defined in `src/modules/models.py`:
+
+| Table | Description |
+|---|---|
+| `cities` | City metadata (name, radius, center coordinates) |
+| `nodes` | Road network nodes (OSM IDs, coordinates) |
+| `edges` | Road network edges (geometry, length) |
+| `run_configs` | Simulation configuration (vehicles, routes, time params) |
+| `iterations` | Individual simulation runs |
+| `vehicles` | Vehicle origin/destination pairs |
+| `vehicle_routes` | Alternative routes per vehicle (duration, distance) |
+| `route_points` | Points along each vehicle route |
+| `congestion_map` | Pairwise congestion scores between vehicle-route pairs |
+| `qubo_run_stats` | QUBO matrix statistics per cluster run |
+| `congestion_summary` | Per-edge congestion results for all solvers |
+| `qa_results` | QUBO/QA optimization results |
+| `qa_selected_routes` | Routes selected by QA optimization |
+| `sa_results` | Simulated Annealing results |
+| `sa_selected_routes` | Routes selected by SA |
+| `tabu_results` | Tabu Search results |
+| `tabu_selected_routes` | Routes selected by Tabu Search |
+| `gurobi_results` | Gurobi MIP solver results |
+| `gurobi_routes` | Routes selected by Gurobi |
+| `cbc_results` | CBC solver results |
+| `cbc_routes` | Routes selected by CBC |
+| `random_routes` | Randomly assigned routes (baseline) |
+| `shortest_routes_duration` | Shortest-duration routes (baseline) |
+| `shortest_routes_distance` | Shortest-distance routes (baseline) |
+| `objective_values` | Objective values per solver for comparison |
 
 **Session Management:**
-- Use `from db_config import get_session` to create a session.
-- Always use context managers (`with` statements) for sessions to ensure proper cleanup.
 
-Example:
 ```python
 from db_config import get_session
-with get_session() as session:
+
+session = get_session()
+try:
     # ORM operations here
-    ...
+    session.commit()
+finally:
+    session.close()
 ```
-
-
-
-## Vehicle Clustering Algorithm
-
-The system implements an intelligent clustering approach to make QUBO optimization scalable for large vehicle fleets:
-
-### Leiden Community Detection
-- Uses the **Leiden algorithm** to detect communities in the vehicle congestion network
-- Vehicles are nodes, congestion interactions are weighted edges
-- Resolution parameter controls cluster granularity (configurable via `CLUSTER_RESOLUTION`)
-
-### Cluster Processing
-- **`get_clusters_by_connectivity()`**: Groups vehicles by total congestion interaction
-- **`merge_small_clusters()`**: Ensures minimum cluster sizes by merging small clusters with high-connectivity neighbors
-- **Parallel Processing**: Each cluster is optimized independently, enabling scalability
-
-### Benefits
-- **Scalability**: Breaks O(n²) problems into multiple smaller sub-problems
-- **Quality**: Maintains optimization quality by preserving high-interaction vehicle groups
-- **Flexibility**: Supports different minimum cluster sizes and resolution parameters
 
 ---
 
+## Directory Structure
 
-[definitionLink]: https://arxiv.org/pdf/2510.06053
+```
+qa_mtc/
+  README.md
+  requirements.txt
+  LICENSE
+  images/                           # Result images and plots
+  maps/                             # Interactive HTML maps (figures from paper)
+  src/
+      modules/
+         main.py                    # Main workflow script
+         main_full.py               # Variant running all solvers
+         config.py                  # Configuration parameters
+         models.py                  # SQLAlchemy ORM models
+         db_config.py               # Database connection setup
+         qubo_matrix.py             # QUBO construction
+         filter_routes_for_qubo.py  # Vehicle filtering logic
+         process_clusters.py        # Cluster processing (QA + Gurobi)
+         process_clusters_full.py   # Cluster processing (all solvers)
+         qa_testing.py              # Quantum/hybrid solver integration
+         sa_testing.py              # Simulated Annealing solver
+         tabu_testing.py            # Tabu Search solver
+         gurobi_testing.py          # Gurobi solver
+         cbc_testing.py             # CBC solver
+         congestion_weights.py      # Congestion weight computation
+         get_congestion_weights.py  # DB retrieval of congestion weights
+         generate_congestion.py     # Congestion generation utilities
+         utils.py                   # Shared utilities (Valhalla client, etc.)
+         analyzes.ipynb             # Analysis notebook
+         ...                        # Additional helper modules
+      sql/                          # SQL queries for comparative analysis
+```
+
+> Note: Runtime output directories (`files_csv/`, `files_html/`) are generated locally and excluded from the repository via `.gitignore`.
+
+---
+
+## License
+
+See [LICENSE](LICENSE).
