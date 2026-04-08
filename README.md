@@ -184,7 +184,6 @@ qa_mtc/
   requirements.txt
   LICENSE
   src/
-      bib/                          # Research notebooks
       modules/
          main.py                   # Main workflow script
          config.py                 # Configuration parameters
@@ -295,9 +294,7 @@ To express the problem in a QUBO matrix form, we flatten the `x_i^k` variables i
     q = i · t + k
 
 Each vehicle-route pair `(i, k)` is assigned a unique index `q ∈ {0, 1, ..., n·t - 1}`.  
-The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients such that:
-
-    F(x) = xᵀ · Q · x
+The QUBO matrix `Q ∈ ℝ^{nt × nt}` then stores the coefficients.
 
 ---
 
