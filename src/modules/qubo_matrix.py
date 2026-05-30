@@ -78,6 +78,7 @@ def qubo_matrix(
                     q1 = i * route_alternatives + k1
                     q2 = j * route_alternatives + k2
                     Q[(q1, q2)] += congestion_w[i][j][k1][k2]
+                    Q[(q2, q1)] += congestion_w[j][i][k2][k1]
 
     valid_pairs = set(zip(vehicle_routes_df['vehicle_id'], vehicle_routes_df['route_id']))
     dynamic_penalties, q_indices, not_real_routes_indices = [], [], []
