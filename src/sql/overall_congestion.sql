@@ -121,9 +121,17 @@ cong AS (
 SELECT #qa.run_configs_id, qa.iteration_id, city.name, 
 	rc.n_vehicles,
     avg(qa.qa_penalty + cong.cong_post_qa) AS QA_HS_COST,
+    avg(qa.qa_penalty) as QA_HS_pen,
+    avg(cong.cong_post_qa) AS QA_HS_CONG,
     avg(gurobi.gurobi_penalty + cong.cong_post_gurobi) AS GUROBI_COST,
+    avg(gurobi.gurobi_penalty) AS GUROBI_pen,
+    avg(cong.cong_post_gurobi) AS GUROBI_CONG,
     avg(random.random_penalty + cong.cong_random) AS RANDOM_COST,
+    avg(random.random_penalty)  AS RANDOM_pen,
+    avg(cong.cong_random) AS RANDOM_CONG,
     avg(0 + cong.cong_shortest_dur) AS SHORTEST_DUR_COST,
+    0 as     SHOTEST_pen,
+    avg(0 + cong.cong_shortest_dur) AS SHORTEST_DUR_CONG,
     CONCAT(FORMAT(AVG((qa.qa_penalty + cong.cong_post_qa - gurobi.gurobi_penalty - cong.cong_post_gurobi)/NULLIF(ABS(gurobi.gurobi_penalty + cong.cong_post_gurobi), 0)) * 100,2), "%") as delta_cost
 	#cong.*
 FROM qa
